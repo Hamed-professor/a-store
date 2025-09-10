@@ -1,0 +1,677 @@
+# =================================================================
+# Staging Docker Compose (docker-compose.staging.yml)
+# =================================================================
+
+version: '3.8'
+
+services:
+  # Staging Frontend
+  frontend:
+    build:
+      context: ../alpha-store-frontend
+      dockerfile: ../alpha-store-production/docker/Dockerfile.frontend
+    container_name: alpha-store-frontend-staging
+    environment:
+      - NODE_ENV=staging
+      - NEXT_PUBLIC_API_URL=https://staging-api.alphastore.ir
+      - NEXT_PUBLIC_DOMAIN=staging.alphastore.ir
+    ports:
+      - "3000:3000"
+    networks:
+      - alpha-staging
+    restart: unless-stopped
+
+  # Staging Backend
+  backend:
+    build:
+      context: ../alpha-store-backend
+      dockerfile: ../alpha-store-production/docker/Dockerfile.backend
+    container_name: alpha-store-backend-staging
+    environment:
+      - NODE_ENV=staging
+      - PORT=4000
+      - MONGODB_URI=mongodb://mongodb-staging:27017/alphastore_staging
+      - REDIS_URL=redis://redis-staging:6379
+    ports:
+      - "4000:4000"
+    depends_on:
+      - mongodb-staging
+      - redis-staging
+    networks:
+      - alpha-staging
+    restart: unless-stopped
+
+  # Staging MongoDB
+  mongodb-staging:
+    image: mongo:6.0
+    container_name: alpha-store-mongodb-staging
+    environment:
+      - MONGO_INITDB_DATABASE=alphastore_staging
+    volumes:
+      - mongodb_staging_data:/data/db
+    ports:
+      - "27018:27017"
+    networks:
+      - alpha-staging
+    restart: unless-stopped
+
+  # Staging Redis
+  redis-staging:
+    image: redis:7-alpine
+    container_name: alpha-store-redis-staging
+    volumes:
+      - redis_staging_data:/data
+    ports:
+      - "6380:6379"
+    networks:
+      - alpha-staging
+    restart: unless-stopped
+
+volumes:
+  mongodb_staging_data:
+  redis_staging_data:
+
+networks:
+  alpha-staging:
+    driver: bridge
+
+# =================================================================
+# Filebeat Configuration (monitoring/filebeat.yml)
+# =================================================================
+
+filebeat.inputs:
+- type: log
+  enabled: true
+  paths:
+    - /var/log/alphastore/frontend/*.log
+  fields:
+    service: frontend
+    environment: production
+  fields_under_root: true
+  multiline.pattern: '^\d{4}-\d{2}-\d{2}'
+  multiline.negate: true
+  multiline.match: after
+
+- type: log
+  enabled: true
+  paths:
+    - /var/log/alphastore/backend/*.log
+  fields:
+    service: backend
+    environment: production
+  fields_under_root: true
+  multiline.pattern: '^\d{4}-\d{2}-\d{2}'
+  multiline.negate: true
+  multiline.match: after
+
+- type: log
+  enabled: true
+  paths:
+    - /var/log/alphastore/nginx/*.log
+  fields:
+    service: nginx
+    environment: production
+  fields_under_root: true
+
+- type: docker
+  containers.ids:
+    - "*"
+  processors:
+    - add_docker_metadata:
+        host: "unix:///var/run/docker.sock"
+
+output.elasticsearch:
+  hosts: ["elasticsearch:9200"]
+  index: "alphastore-logs-%{+yyyy.MM.dd}"
+  template.settings:
+    index.number_of_shards: 1
+    index.number_of_replicas: 0
+
+processors:
+  - timestamp:
+      field: json.timestamp
+      layouts:
+        - '2006-01-02T15:04:05.000Z'
+        - '2006-01-02T15:04:05Z'
+      test:
+        - '2023-10-01T12:00:00.000Z'
+
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: /var/log/filebeat
+  name: filebeat
+  keepfiles: 7
+  permissions: 0644
+
+# =================================================================
+# Systemd Service Files
+# =================================================================
+
+# Alpha Store Service (/etc/systemd/system/alpha-store.service)
+
+[Unit]
+Description=Alpha Store Production Service
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+WorkingDirectory=/opt/alpha-store-production
+ExecStart=/usr/local/bin/docker-compose -f docker-compose.prod.yml up -d
+ExecStop=/usr/local/bin/docker-compose -f docker-compose.prod.yml down
+ExecReload=/usr/local/bin/docker-compose -f docker-compose.prod.yml restart
+TimeoutStartSec=0
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target
+
+# Alpha Store Backup Service (/etc/systemd/system/alpha-store-backup.service)
+
+[Unit]
+Description=Alpha Store Backup Service
+Wants=alpha-store-backup.timer
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/alpha-store-production/scripts/backup.sh
+StandardOutput=journal
+StandardError=journal
+
+# Alpha Store Backup Timer (/etc/systemd/system/alpha-store-backup.timer)
+
+[Unit]
+Description=Alpha Store Backup Timer
+Requires=alpha-store-backup.service
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+
+# =================================================================
+# Logrotate Configuration (/etc/logrotate.d/alpha-store)
+# =================================================================
+
+/var/log/alpha-store/*.log {
+    daily
+    missingok
+    rotate 30
+    compress
+    delaycompress
+    notifempty
+    create 644 www-data adm
+    sharedscripts
+    postrotate
+        docker exec alpha-store-nginx nginx -s reload > /dev/null 2>&1 || true
+        docker exec alpha-store-backend kill -USR1 1 > /dev/null 2>&1 || true
+    endscript
+}
+
+/var/log/nginx/*.log {
+    daily
+    missingok
+    rotate 30
+    compress
+    delaycompress
+    notifempty
+    create 644 www-data adm
+    sharedscripts
+    prerotate
+        if [ -d /etc/logrotate.d/httpd-prerotate ]; then \
+            run-parts /etc/logrotate.d/httpd-prerotate; \
+        fi
+    endscript
+    postrotate
+        docker exec alpha-store-nginx nginx -s reload > /dev/null 2>&1 || true
+    endscript
+}
+
+# =================================================================
+# Environment Template (.env.production.template)
+# =================================================================
+
+# Alpha Store Production Environment Configuration Template
+# Copy this file to .env.production and fill in your actual values
+
+# ============= APPLICATION SETTINGS =============
+NODE_ENV=production
+DOMAIN=alphastore.ir
+PORT=4000
+FRONTEND_URL=https://alphastore.ir
+ADMIN_URL=https://admin.alphastore.ir
+API_URL=https://api.alphastore.ir
+
+# ============= SECURITY SECRETS =============
+# Generate secure random strings for these values
+# Use: openssl rand -base64 32
+JWT_SECRET=CHANGE_ME_TO_SECURE_32_CHAR_STRING
+ENCRYPTION_KEY=CHANGE_ME_TO_SECURE_32_CHAR_STRING
+SESSION_SECRET=CHANGE_ME_TO_SECURE_32_CHAR_STRING
+CSRF_SECRET=CHANGE_ME_TO_SECURE_32_CHAR_STRING
+
+# ============= DATABASE CONFIGURATION =============
+MONGODB_URI=mongodb://mongodb:27017/alphastore_prod
+MONGODB_ROOT_USERNAME=root
+MONGODB_ROOT_PASSWORD=CHANGE_ME_TO_SECURE_PASSWORD
+MONGODB_USERNAME=alphastore
+MONGODB_PASSWORD=CHANGE_ME_TO_SECURE_PASSWORD
+
+# ============= REDIS CONFIGURATION =============
+REDIS_URL=redis://redis:6379
+REDIS_PASSWORD=CHANGE_ME_TO_SECURE_PASSWORD
+
+# ============= IRANIAN PAYMENT GATEWAYS =============
+# ZarinPal Configuration
+ZARINPAL_MERCHANT_ID=YOUR_ZARINPAL_MERCHANT_ID
+ZARINPAL_SANDBOX=false
+
+# Bank Mellat Configuration
+MELLAT_TERMINAL_ID=YOUR_MELLAT_TERMINAL_ID
+MELLAT_USERNAME=YOUR_MELLAT_USERNAME
+MELLAT_PASSWORD=YOUR_MELLAT_PASSWORD
+
+# Saman Bank Configuration
+SAMAN_MERCHANT_ID=YOUR_SAMAN_MERCHANT_ID
+
+# Pasargad Bank Configuration
+PASARGAD_MERCHANT_ID=YOUR_PASARGAD_MERCHANT_ID
+PASARGAD_TERMINAL_ID=YOUR_PASARGAD_TERMINAL_ID
+PASARGAD_PRIVATE_KEY=YOUR_PASARGAD_PRIVATE_KEY
+
+# ============= IRANIAN SMS SERVICES =============
+# Kavenegar SMS Service
+KAVENEGAR_API_KEY=YOUR_KAVENEGAR_API_KEY
+KAVENEGAR_SENDER=YOUR_KAVENEGAR_SENDER
+
+# SMS.ir Service
+SMS_IR_API_KEY=YOUR_SMS_IR_API_KEY
+SMS_IR_SECRET_KEY=YOUR_SMS_IR_SECRET_KEY
+SMS_IR_LINE_NUMBER=YOUR_SMS_IR_LINE_NUMBER
+
+# Selected SMS Service (kavenegar, smsir)
+SMS_SERVICE=kavenegar
+
+# ============= EMAIL CONFIGURATION =============
+EMAIL_FROM=noreply@alphastore.ir
+EMAIL_NAME=فروشگاه آلفا استور
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+
+# ============= FILE STORAGE =============
+UPLOAD_DIR=/app/uploads
+MAX_FILE_SIZE=10485760
+ALLOWED_FILE_TYPES=jpg,jpeg,png,gif,pdf,doc,docx
+
+# Iranian CDN Configuration (optional)
+ARVAN_CLOUD_ACCESS_KEY=YOUR_ARVAN_ACCESS_KEY
+ARVAN_CLOUD_SECRET_KEY=YOUR_ARVAN_SECRET_KEY
+ARVAN_CLOUD_BUCKET=YOUR_ARVAN_BUCKET
+CDN_URL=https://cdn.alphastore.ir
+
+# ============= MONITORING =============
+GRAFANA_ADMIN_PASSWORD=CHANGE_ME_TO_SECURE_PASSWORD
+PROMETHEUS_RETENTION=30d
+
+# ============= BACKUP CONFIGURATION =============
+BACKUP_ENCRYPTION_KEY=CHANGE_ME_TO_SECURE_32_CHAR_STRING
+BACKUP_SCHEDULE="0 2 * * *"
+BACKUP_RETENTION_DAYS=30
+ADMIN_EMAIL=admin@alphastore.ir
+
+# ============= RATE LIMITING =============
+RATE_LIMIT_GENERAL=100
+RATE_LIMIT_AUTH=5
+RATE_LIMIT_API=200
+RATE_LIMIT_WINDOW=900
+
+# ============= SECURITY HEADERS =============
+HSTS_MAX_AGE=31536000
+CSP_REPORT_URI=https://api.alphastore.ir/security/csp-report
+
+# ============= PERSIAN/IRANIAN SETTINGS =============
+DEFAULT_LANGUAGE=fa
+DEFAULT_CURRENCY=IRR
+DEFAULT_TIMEZONE=Asia/Tehran
+ENABLE_PERSIAN_CALENDAR=true
+ENABLE_PERSIAN_NUMBERS=true
+
+# ============= ANALYTICS =============
+GOOGLE_ANALYTICS_ID=YOUR_GA_ID
+GOOGLE_TAG_MANAGER_ID=YOUR_GTM_ID
+
+# =================================================================
+# Main Deployment README
+# =================================================================
+
+# Alpha Store Production Deployment Guide
+
+## Prerequisites
+
+1. Ubuntu 20.04+ or CentOS 8+ server
+2. Minimum 4GB RAM, 2 CPU cores, 50GB storage
+3. Domain name pointed to server IP
+4. Docker and Docker Compose installed
+5. Root or sudo access
+
+## Quick Deployment
+
+```bash
+# 1. Clone repository
+git clone https://github.com/your-repo/alpha-store-production.git
+cd alpha-store-production
+
+# 2. Configure environment
+cp .env.production.template .env.production
+nano .env.production  # Fill in your configuration
+
+# 3. Run deployment script
+chmod +x scripts/deploy.sh
+./scripts/deploy.sh
+
+# 4. Check status
+./scripts/health-check.sh
+```
+
+## Manual Deployment Steps
+
+### 1. System Preparation
+```bash
+# Update system
+apt update && apt upgrade -y
+
+# Install Docker
+curl -fsSL https://get.docker.com -o get-docker.sh
+sh get-docker.sh
+
+# Install Docker Compose
+curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+chmod +x /usr/local/bin/docker-compose
+```
+
+### 2. SSL Certificate Setup
+```bash
+# Install Certbot
+apt install -y certbot python3-certbot-nginx
+
+# Run SSL setup script
+chmod +x scripts/ssl-setup.sh
+./scripts/ssl-setup.sh
+```
+
+### 3. Security Configuration
+```bash
+# Configure firewall
+chmod +x security/firewall-rules.sh
+./security/firewall-rules.sh
+
+# Install and configure fail2ban
+apt install -y fail2ban
+cp security/fail2ban.conf /etc/fail2ban/jail.local
+systemctl restart fail2ban
+```
+
+### 4. Deploy Application
+```bash
+# Build and start services
+docker-compose -f docker-compose.prod.yml up -d
+
+# Wait for services to start
+sleep 60
+
+# Run health checks
+./scripts/health-check.sh
+```
+
+### 5. Setup Monitoring
+```bash
+# Configure systemd services
+cp systemd/*.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable alpha-store alpha-store-backup.timer
+systemctl start alpha-store-backup.timer
+```
+
+## Configuration Files
+
+- `.env.production` - Main environment configuration
+- `docker-compose.prod.yml` - Production Docker setup
+- `nginx/nginx.conf` - Nginx reverse proxy configuration
+- `config/production.js` - Application configuration
+- `security/` - Security configurations
+- `monitoring/` - Monitoring configurations
+
+## Management Scripts
+
+- `scripts/deploy.sh` - Full deployment script
+- `scripts/update.sh` - Update and maintenance script
+- `scripts/backup.sh` - Backup script
+- `scripts/health-check.sh` - Health monitoring script
+- `scripts/ssl-setup.sh` - SSL certificate management
+
+## Monitoring Access
+
+- **Grafana Dashboard**: http://your-server-ip:3001
+- **Prometheus Metrics**: http://your-server-ip:9090
+- **Main Site**: https://alphastore.ir
+- **Admin Panel**: https://admin.alphastore.ir
+
+## Backup & Recovery
+
+### Automated Backups
+Backups run automatically daily at 2:00 AM Tehran time.
+
+### Manual Backup
+```bash
+./scripts/backup.sh
+```
+
+### Restore from Backup
+```bash
+# List available backups
+ls -la /backups/alpha-store/
+
+# Restore database
+docker exec alpha-store-mongodb mongorestore /data/backups/backup_TIMESTAMP/
+
+# Restore files
+tar -xzf /backups/alpha-store/files/uploads_TIMESTAMP.tar.gz -C /opt/alpha-store-production/
+```
+
+## Security Features
+
+- **SSL/TLS Encryption** - All traffic encrypted
+- **Rate Limiting** - API and endpoint protection
+- **Firewall Rules** - Network security
+- **Fail2Ban** - Intrusion prevention
+- **Security Headers** - XSS, CSRF protection
+- **Input Validation** - SQL injection prevention
+- **File Upload Security** - Malware scanning
+
+## Performance Optimizations
+
+- **Redis Caching** - Session and data caching
+- **Nginx Compression** - Gzip/Brotli compression
+- **Image Optimization** - Automatic image compression
+- **CDN Integration** - Static asset delivery
+- **Database Indexing** - Query optimization
+- **Connection Pooling** - Database connections
+
+## Iranian Compliance
+
+- **Local Payment Gateways** - ZarinPal, Mellat, Saman
+- **Persian SMS Services** - Kavenegar, SMS.ir
+- **RTL Support** - Right-to-left layout
+- **Persian Calendar** - Jalali date system
+- **Persian Numbers** - Localized numbering
+- **Iranian CDN** - ArvanCloud integration
+
+## Troubleshooting
+
+### Service Issues
+```bash
+# Check service status
+docker-compose -f docker-compose.prod.yml ps
+
+# View logs
+docker-compose -f docker-compose.prod.yml logs [service-name]
+
+# Restart specific service
+docker-compose -f docker-compose.prod.yml restart [service-name]
+```
+
+### SSL Issues
+```bash
+# Check SSL certificate
+openssl x509 -in /etc/letsencrypt/live/alphastore.ir/fullchain.pem -text -noout
+
+# Renew certificates
+certbot renew --dry-run
+```
+
+### Database Issues
+```bash
+# Connect to MongoDB
+docker exec -it alpha-store-mongodb mongo alphastore_prod
+
+# Check Redis
+docker exec -it alpha-store-redis redis-cli ping
+```
+
+## Maintenance Tasks
+
+### Daily
+- Automated backups
+- Log rotation
+- Health checks
+- Security monitoring
+
+### Weekly
+- Database optimization
+- Cache cleanup
+- SSL certificate check
+- Performance monitoring
+
+### Monthly
+- System updates
+- Security patches
+- Backup verification
+- Performance optimization
+
+## Support & Maintenance
+
+For production support:
+1. Monitor Grafana dashboards
+2. Check system logs regularly
+3. Review security alerts
+4. Update dependencies monthly
+5. Test backup restore procedures
+
+## Emergency Procedures
+
+### Service Down
+```bash
+# Quick restart
+docker-compose -f docker-compose.prod.yml restart
+
+# Full reset
+docker-compose -f docker-compose.prod.yml down
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+### Database Recovery
+```bash
+# Stop application
+docker-compose -f docker-compose.prod.yml stop backend frontend admin
+
+# Restore database
+./scripts/backup.sh database
+
+# Start application
+docker-compose -f docker-compose.prod.yml start backend frontend admin
+```
+
+### Rollback Deployment
+```bash
+# Find latest backup
+ls -la /backups/alpha-store/config/
+
+# Rollback to specific backup
+./scripts/update.sh rollback YYYYMMDD_HHMMSS
+```
+
+---
+
+## File Structure Summary
+
+```
+alpha-store-production/
+├── docker/
+│   ├── Dockerfile.frontend
+│   ├── Dockerfile.backend
+│   ├── Dockerfile.nginx
+│   └── .dockerignore
+├── nginx/
+│   ├── nginx.conf
+│   ├── sites-available/
+│   ├── ssl/
+│   └── security/
+├── scripts/
+│   ├── deploy.sh
+│   ├── ssl-setup.sh
+│   ├── backup.sh
+│   ├── health-check.sh
+│   └── update.sh
+├── security/
+│   ├── firewall-rules.sh
+│   ├── fail2ban.conf
+│   └── rate-limits.conf
+├── monitoring/
+│   ├── prometheus.yml
+│   ├── grafana-dashboard.json
+│   ├── alerting-rules.yml
+│   └── filebeat.yml
+├── config/
+│   ├── production.js
+│   ├── security.js
+│   ├── monitoring.js
+│   └── redis.conf
+├── systemd/
+│   ├── alpha-store.service
+│   ├── alpha-store-backup.service
+│   └── alpha-store-backup.timer
+├── docker-compose.yml
+├── docker-compose.prod.yml
+├── docker-compose.staging.yml
+├── .env.production
+├── .env.production.template
+└── README.md
+```
+
+This production deployment provides:
+
+✅ **Complete containerized setup** with Docker Compose
+✅ **SSL/HTTPS enforcement** with Let's Encrypt
+✅ **Reverse proxy with Nginx** including security headers
+✅ **Monitoring stack** with Prometheus & Grafana
+✅ **Automated backups** with verification
+✅ **Security hardening** with firewall and fail2ban
+✅ **Iranian payment gateway integration**
+✅ **Persian/RTL support** and localization
+✅ **Performance optimization** with caching and compression
+✅ **Health monitoring** and alerting
+✅ **Zero-downtime updates** with rolling deployment
+✅ **Disaster recovery** procedures
+✅ **Production-ready logging** and log rotation
+✅ **Rate limiting** and DDoS protection
+✅ **Database optimization** with indexes and validation
+
+The deployment is ready for production use with alphastore.ir domain and includes all necessary components for a secure, scalable, and maintainable e-commerce platform specifically tailored for the Iranian market.

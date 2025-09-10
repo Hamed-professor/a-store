@@ -1,0 +1,235 @@
+// src/utils/currency.ts
+
+// Persian/Farsi digits mapping
+const persianDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+const arabicDigits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+
+/**
+ * Convert English digits to Persian/Farsi digits
+ */
+export function toPersianDigits(str: string | number): string {
+  const numStr = str.toString();
+  return numStr.replace(/\d/g, (digit) => persianDigits[parseInt(digit)]);
+}
+
+/**
+ * Convert Persian/Arabic digits to English digits
+ */
+export function toEnglishDigits(str: string): string {
+  let result = str;
+  
+  // Convert Persian digits
+  persianDigits.forEach((persian, index) => {
+    result = result.replace(new RegExp(persian, 'g'), index.toString());
+  });
+  
+  // Convert Arabic digits
+  arabicDigits.forEach((arabic, index) => {
+    result = result.replace(new RegExp(arabic, 'g'), index.toString());
+  });
+  
+  return result;
+}
+
+/**
+ * Format number with thousands separator
+ */
+export function formatNumber(
+  num: number,
+  locale: 'fa' | 'en' = 'fa',
+  options: {
+    useGrouping?: boolean;
+    minimumFractionDigits?: number;
+    maximumFractionDigits?: number;
+  } = {}
+): string {
+  const {
+    useGrouping = true,
+    minimumFractionDigits = 0,
+    maximumFractionDigits = 0
+  } = options;
+
+  const formatted = new Intl.NumberFormat(locale === 'fa' ? 'fa-IR' : 'en-US', {
+    useGrouping,
+    minimumFractionDigits,
+    maximumFractionDigits
+  }).format(num);
+
+  return locale === 'fa' ? formatted : formatted;
+}
+
+/**
+ * Format Iranian Rial currency
+ */
+export function formatRial(
+  amount: number,
+  locale: 'fa' | 'en' = 'fa',
+  options: {
+    showCurrency?: boolean;
+    showToman?: boolean;
+    compact?: boolean;
+  } = {}
+): string {
+  const { showCurrency = true, showToman = false, compact = false } = options;
+
+  if (compact && amount >= 1000000) {
+    const millions = amount / 1000000;
+    const formatted = formatNumber(millions, locale, { maximumFractionDigits: 1 });
+    if (locale === 'fa') {
+      return showToman 
+        ? `${formatted} میلیون ${showCurrency ? 'تومان' : ''}`
+        : `${formatted} میلیون ${showCurrency ? 'ریال' : ''}`;
+    } else {
+      return showToman
+        ? `${formatted}M ${showCurrency ? 'Toman' : ''}`
+        : `${formatted}M ${showCurrency ? 'Rial' : ''}`;
+    }
+  }
+
+  const displayAmount = showToman ? amount / 10 : amount;
+  const formatted = formatNumber(displayAmount, locale);
+
+  if (!showCurrency) return formatted;
+
+  if (locale === 'fa') {
+    return showToman ? `${formatted} تومان` : `${formatted} ریال`;
+  } else {
+    return showToman ? `${formatted} Toman` : `${formatted} Rial`;
+  }
+}
+
+/**
+ * Format USD currency
+ */
+export function formatUSD(
+  amount: number,
+  locale: 'fa' | 'en' = 'fa',
+  options: {
+    showCurrency?: boolean;
+    compact?: boolean;
+  } = {}
+): string {
+  const { showCurrency = true, compact = false } = options;
+
+  if (compact && amount >= 1000) {
+    const thousands = amount / 1000;
+    const formatted = formatNumber(thousands, locale, { maximumFractionDigits: 1 });
+    return locale === 'fa' 
+      ? `${formatted}K ${showCurrency ? '$' : ''}`
+      : `$${formatted}K`;
+  }
+
+  const formatted = formatNumber(amount, locale, { maximumFractionDigits: 2 });
+
+  if (!showCurrency) return formatted;
+
+  return locale === 'fa' ? `${formatted} $` : `$${formatted}`;
+}
+
+/**
+ * Calculate discount percentage
+ */
+export function calculateDiscount(originalPrice: number, currentPrice: number): number {
+  if (originalPrice <= currentPrice) return 0;
+  return Math.round(((originalPrice - currentPrice) / originalPrice) * 100);
+}
+
+/**
+ * Format price with discount information
+ */
+export function formatPriceWithDiscount(
+  currentPrice: number,
+  originalPrice?: number,
+  currency: 'IRR' | 'USD' = 'IRR',
+  locale: 'fa' | 'en' = 'fa'
+): {
+  currentPrice: string;
+  originalPrice?: string;
+  discount?: {
+    amount: string;
+    percentage: number;
+  };
+} {
+  const formatFunction = currency === 'IRR' ? formatRial : formatUSD;
+  
+  const result = {
+    currentPrice: formatFunction(currentPrice, locale, { showToman: currency === 'IRR' })
+  };
+
+  if (originalPrice && originalPrice > currentPrice) {
+    const discountPercentage = calculateDiscount(originalPrice, currentPrice);
+    const discountAmount = originalPrice - currentPrice;
+
+    return {
+      ...result,
+      originalPrice: formatFunction(originalPrice, locale, { showToman: currency === 'IRR' }),
+      discount: {
+        amount: formatFunction(discountAmount, locale, { showToman: currency === 'IRR' }),
+        percentage: discountPercentage
+      }
+    };
+  }
+
+  return result;
+}
+
+/**
+ * Convert Rial to Toman
+ */
+export function rialToToman(rial: number): number {
+  return rial / 10;
+}
+
+/**
+ * Convert Toman to Rial
+ */
+export function tomanToRial(toman: number): number {
+  return toman * 10;
+}
+
+/**
+ * Format compact price for cards
+ */
+export function formatCompactPrice(
+  amount: number,
+  currency: 'IRR' | 'USD' = 'IRR',
+  locale: 'fa' | 'en' = 'fa'
+): string {
+  if (currency === 'IRR') {
+    return formatRial(amount, locale, { 
+      showToman: true, 
+      compact: true,
+      showCurrency: true 
+    });
+  } else {
+    return formatUSD(amount, locale, { 
+      compact: true,
+      showCurrency: true 
+    });
+  }
+}
+
+/**
+ * Parse price string to number
+ */
+export function parsePriceString(priceStr: string): number {
+  const englishDigits = toEnglishDigits(priceStr);
+  const cleanedStr = englishDigits.replace(/[^\d.]/g, '');
+  return parseFloat(cleanedStr) || 0;
+}
+
+/**
+ * Validate price range
+ */
+export function validatePriceRange(min: number, max: number): boolean {
+  return min >= 0 && max >= 0 && min <= max;
+}
+
+/**
+ * Get currency symbol
+ */
+export function getCurrencySymbol(currency: 'IRR' | 'USD', locale: 'fa' | 'en' = 'fa'): string {
+  if (currency === 'USD') return '$';
+  
+  return locale === 'fa' ? 'ریال' : 'IRR';
+}

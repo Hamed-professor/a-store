@@ -1,0 +1,341 @@
+// src/components/payment/PaymentStatus.tsx
+import React from 'react';
+import { motion } from 'framer-motion';
+import { 
+  CheckCircle, 
+  XCircle, 
+  Clock, 
+  Loader2, 
+  AlertTriangle, 
+  RefreshCw,
+  Download,
+  Home,
+  ShoppingBag
+} from 'lucide-react';
+import { PaymentStatus, PaymentVerification } from '../../types/payment';
+import { formatCurrency, getPaymentStatusColor, getPaymentStatusLabel, formatPaymentReceipt } from '../../utils/payment';
+
+interface PaymentStatusProps {
+  status: PaymentStatus;
+  verification?: PaymentVerification | null;
+  orderId?: string;
+  amount?: number;
+  currency?: 'IRR' | 'IRT';
+  error?: string;
+  errorPersian?: string;
+  isRetryable?: boolean;
+  onRetry?: () => void;
+  onDownloadReceipt?: () => void;
+  onGoHome?: () => void;
+  onViewOrders?: () => void;
+}
+
+const PaymentStatusComponent: React.FC<PaymentStatusProps> = ({
+  status,
+  verification,
+  orderId,
+  amount,
+  currency = 'IRT',
+  error,
+  errorPersian,
+  isRetryable,
+  onRetry,
+  onDownloadReceipt,
+  onGoHome,
+  onViewOrders
+}) => {
+  const statusConfig = {
+    [PaymentStatus.PENDING]: {
+      icon: Clock,
+      color: 'text-yellow-500',
+      bgColor: 'bg-yellow-50',
+      borderColor: 'border-yellow-200',
+      title: 'در انتظار پرداخت',
+      description: 'لطفاً شکیبا باشید...'
+    },
+    [PaymentStatus.PROCESSING]: {
+      icon: Loader2,
+      color: 'text-blue-500',
+      bgColor: 'bg-blue-50',
+      borderColor: 'border-blue-200',
+      title: 'در حال پردازش',
+      description: 'پرداخت شما در حال بررسی است'
+    },
+    [PaymentStatus.COMPLETED]: {
+      icon: CheckCircle,
+      color: 'text-green-500',
+      bgColor: 'bg-green-50',
+      borderColor: 'border-green-200',
+      title: 'پرداخت موفق',
+      description: 'سفارش شما با موفقیت پرداخت شد'
+    },
+    [PaymentStatus.FAILED]: {
+      icon: XCircle,
+      color: 'text-red-500',
+      bgColor: 'bg-red-50',
+      borderColor: 'border-red-200',
+      title: 'پرداخت ناموفق',
+      description: 'متأسفانه پرداخت شما انجام نشد'
+    },
+    [PaymentStatus.CANCELLED]: {
+      icon: XCircle,
+      color: 'text-gray-500',
+      bgColor: 'bg-gray-50',
+      borderColor: 'border-gray-200',
+      title: 'پرداخت لغو شد',
+      description: 'پرداخت توسط کاربر لغو شد'
+    },
+    [PaymentStatus.EXPIRED]: {
+      icon: AlertTriangle,
+      color: 'text-orange-500',
+      bgColor: 'bg-orange-50',
+      borderColor: 'border-orange-200',
+      title: 'زمان پرداخت به پایان رسید',
+      description: 'مهلت پرداخت منقضی شده است'
+    },
+    [PaymentStatus.REFUNDED]: {
+      icon: RefreshCw,
+      color: 'text-purple-500',
+      bgColor: 'bg-purple-50',
+      borderColor: 'border-purple-200',
+      title: 'پرداخت بازگردانده شد',
+      description: 'مبلغ پرداختی به حساب شما بازگردانده شد'
+    }
+  };
+
+  const config = statusConfig[status];
+  const IconComponent = config.icon;
+  const statusLabel = getPaymentStatusLabel(status);
+
+  const handleDownloadReceipt = () => {
+    if (verification) {
+      const receiptContent = formatPaymentReceipt(verification);
+      const blob = new Blob([receiptContent], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `receipt-${verification.orderId}.txt`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+    onDownloadReceipt?.();
+  };
+
+  return (
+    <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-lg" dir="rtl">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="text-center"
+      >
+        {/* Status Icon */}
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ delay: 0.2 }}
+          className={`inline-flex items-center justify-center w-20 h-20 rounded-full ${config.bgColor} ${config.borderColor} border-2 mb-6`}
+        >
+          <IconComponent 
+            className={`w-10 h-10 ${config.color} ${status === PaymentStatus.PROCESSING ? 'animate-spin' : ''}`} 
+          />
+        </motion.div>
+
+        {/* Status Title */}
+        <motion.h2
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
+          className="text-2xl font-bold text-gray-900 mb-2"
+        >
+          {config.title}
+        </motion.h2>
+
+        {/* Status Description */}
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.4 }}
+          className="text-gray-600 mb-6"
+        >
+          {config.description}
+        </motion.p>
+
+        {/* Error Message */}
+        {(error || errorPersian) && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+            className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg"
+          >
+            <p className="text-red-800 text-sm">{errorPersian || error}</p>
+          </motion.div>
+        )}
+
+        {/* Payment Details */}
+        {(orderId || amount || verification) && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+            className="mb-6 p-4 bg-gray-50 rounded-lg text-right"
+          >
+            <h3 className="font-medium text-gray-900 mb-3">جزئیات پرداخت</h3>
+            <div className="space-y-2 text-sm">
+              {(orderId || verification?.orderId) && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">شماره سفارش:</span>
+                  <span className="font-medium">{verification?.orderId || orderId}</span>
+                </div>
+              )}
+              {verification?.transactionId && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">شماره تراکنش:</span>
+                  <span className="font-medium font-mono">{verification.transactionId}</span>
+                </div>
+              )}
+              {verification?.refId && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">شماره پیگیری:</span>
+                  <span className="font-medium font-mono">{verification.refId}</span>
+                </div>
+              )}
+              {(amount || verification?.amount) && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">مبلغ:</span>
+                  <span className="font-medium text-lg">
+                    {formatCurrency(verification?.amount || amount || 0, verification?.currency || currency)}
+                  </span>
+                </div>
+              )}
+              {verification?.gatewayId && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">درگاه پرداخت:</span>
+                  <span className="font-medium capitalize">{verification.gatewayId}</span>
+                </div>
+              )}
+              {verification?.cardPan && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">شماره کارت:</span>
+                  <span className="font-medium font-mono">****{verification.cardPan.slice(-4)}</span>
+                </div>
+              )}
+              {verification?.verifiedAt && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">زمان پرداخت:</span>
+                  <span className="font-medium">
+                    {new Date(verification.verifiedAt).toLocaleDateString('fa-IR')} - 
+                    {new Date(verification.verifiedAt).toLocaleTimeString('fa-IR')}
+                  </span>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Action Buttons */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.6 }}
+          className="space-y-3"
+        >
+          {/* Success Actions */}
+          {status === PaymentStatus.COMPLETED && (
+            <>
+              {verification && (
+                <button
+                  onClick={handleDownloadReceipt}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  دانلود رسید
+                </button>
+              )}
+              <button
+                onClick={onViewOrders}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <ShoppingBag className="w-4 h-4" />
+                مشاهده سفارشات
+              </button>
+            </>
+          )}
+
+          {/* Retry Action */}
+          {(status === PaymentStatus.FAILED || status === PaymentStatus.EXPIRED) && isRetryable && (
+            <button
+              onClick={onRetry}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+            >
+              <RefreshCw className="w-4 h-4" />
+              تلاش مجدد
+            </button>
+          )}
+
+          {/* Back to Home */}
+          <button
+            onClick={onGoHome}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+          >
+            <Home className="w-4 h-4" />
+            بازگشت به خانه
+          </button>
+        </motion.div>
+
+        {/* Processing Animation */}
+        {status === PaymentStatus.PROCESSING && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mt-6 text-center"
+          >
+            <div className="flex justify-center items-center gap-2 text-blue-600">
+              <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce"></div>
+              <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+              <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+            </div>
+            <p className="text-sm text-gray-600 mt-2">
+              این فرآیند ممکن است چند دقیقه طول بکشد
+            </p>
+          </motion.div>
+        )}
+
+        {/* Support Information */}
+        {(status === PaymentStatus.FAILED || status === PaymentStatus.EXPIRED) && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.7 }}
+            className="mt-6 p-4 bg-blue-50 rounded-lg text-center"
+          >
+            <p className="text-blue-800 text-sm mb-2">
+              در صورت بروز مشکل با پشتیبانی تماس بگیرید
+            </p>
+            <div className="text-blue-600 text-sm">
+              <div>تلفن: ۰۲۱-۱۲۳۴۵۶۷۸</div>
+              <div>ایمیل: support@alphastore.ir</div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Security Badge */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.8 }}
+          className="mt-6 flex items-center justify-center gap-2 text-xs text-gray-500"
+        >
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 2L3 7v3c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-7-5z" clipRule="evenodd" />
+          </svg>
+          <span>محافظت شده با α Store</span>
+        </motion.div>
+      </motion.div>
+    </div>
+  );
+};
+
+export default PaymentStatusComponent;

@@ -1,0 +1,362 @@
+/**
+ * Brand Provider Component
+ * Provides brand context and theme management across the application
+ */
+
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { ALPHA_BRAND_CONFIG, type AlphaTheme } from '@/utils/brand';
+import { getCurrentDirection, setDocumentDirection, type Direction } from '@/utils/rtl';
+
+// Brand Context Types
+export interface BrandContextType {
+  // Theme management
+  theme: AlphaTheme;
+  setTheme: (theme: AlphaTheme) => void;
+  
+  // Direction management
+  direction: Direction;
+  setDirection: (direction: Direction) => void;
+  toggleDirection: () => void;
+  
+  // Brand configuration
+  brandConfig: typeof ALPHA_BRAND_CONFIG;
+  
+  // Loading state
+  isLoading: boolean;
+  setIsLoading: (loading: boolean) => void;
+  
+  // Mounted state (for SSR)
+  isMounted: boolean;
+}
+
+// Create Context
+const BrandContext = createContext<BrandContextType | undefined>(undefined);
+
+// Storage keys
+const THEME_STORAGE_KEY = 'alpha-store-theme';
+const DIRECTION_STORAGE_KEY = 'alpha-store-direction';
+
+// Brand Provider Props
+export interface BrandProviderProps {
+  children: React.ReactNode;
+  defaultTheme?: AlphaTheme;
+  defaultDirection?: Direction;
+  storageEnabled?: boolean;
+}
+
+/**
+ * Brand Provider Component
+ */
+export const BrandProvider: React.FC<BrandProviderProps> = ({
+  children,
+  defaultTheme = 'light',
+  defaultDirection = 'rtl',
+  storageEnabled = true
+}) => {
+  const [theme, setThemeState] = useState<AlphaTheme>(defaultTheme);
+  const [direction, setDirectionState] = useState<Direction>(defaultDirection);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Initialize from storage and browser preferences
+  useEffect(() => {
+    if (!storageEnabled) {
+      setIsMounted(true);
+      return;
+    }
+
+    try {
+      // Load theme from storage or detect system preference
+      const storedTheme = localStorage.getItem(THEME_STORAGE_KEY) as AlphaTheme;
+      const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      
+      if (storedTheme && ['light', 'dark', 'gold'].includes(storedTheme)) {
+        setThemeState(storedTheme);
+      } else if (systemPrefersDark) {
+        setThemeState('dark');
+      }
+
+      // Load direction from storage or detect language
+      const storedDirection = localStorage.getItem(DIRECTION_STORAGE_KEY) as Direction;
+      const browserLanguage = navigator.language.split('-')[0];
+      const rtlLanguages = ['fa', 'ar', 'he', 'ur'];
+      
+      if (storedDirection && ['ltr', 'rtl'].includes(storedDirection)) {
+        setDirectionState(storedDirection);
+      } else if (rtlLanguages.includes(browserLanguage)) {
+        setDirectionState('rtl');
+      }
+    } catch (error) {
+      console.warn('Failed to load brand preferences from storage:', error);
+    }
+
+    setIsMounted(true);
+  }, [storageEnabled]);
+
+  // Apply theme to document
+  useEffect(() => {
+    if (!isMounted) return;
+
+    document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.className = document.documentElement.className
+      .replace(/alpha-theme-\w+/g, '')
+      .concat(` alpha-theme-${theme}`);
+
+    // Apply theme colors to meta theme-color
+    const themeColors = {
+      light: '#f9f6f0',
+      dark: '#1a1a1a',
+      gold: '#d4af37'
+    };
+    
+    const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    if (metaThemeColor) {
+      metaThemeColor.setAttribute('content', themeColors[theme]);
+    }
+  }, [theme, isMounted]);
+
+  // Apply direction to document
+  useEffect(() => {
+    if (!isMounted) return;
+    
+    setDocumentDirection(direction);
+    document.documentElement.setAttribute('data-direction', direction);
+    document.body.className = document.body.className
+      .replace(/alpha-dir-\w+/g, '')
+      .concat(` alpha-dir-${direction}`);
+  }, [direction, isMounted]);
+
+  // Theme setter with storage
+  const setTheme = useCallback((newTheme: AlphaTheme) => {
+    setThemeState(newTheme);
+    
+    if (storageEnabled) {
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, newTheme);
+      } catch (error) {
+        console.warn('Failed to save theme preference:', error);
+      }
+    }
+  }, [storageEnabled]);
+
+  // Direction setter with storage
+  const setDirection = useCallback((newDirection: Direction) => {
+    setDirectionState(newDirection);
+    
+    if (storageEnabled) {
+      try {
+        localStorage.setItem(DIRECTION_STORAGE_KEY, newDirection);
+      } catch (error) {
+        console.warn('Failed to save direction preference:', error);
+      }
+    }
+  }, [storageEnabled]);
+
+  // Direction toggle
+  const toggleDirection = useCallback(() => {
+    const newDirection = direction === 'rtl' ? 'ltr' : 'rtl';
+    setDirection(newDirection);
+  }, [direction, setDirection]);
+
+  // Listen for system theme changes
+  useEffect(() => {
+    if (!storageEnabled || !isMounted) return;
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e: MediaQueryListEvent) => {
+      // Only auto-switch if no theme is stored
+      const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+      if (!storedTheme) {
+        setThemeState(e.matches ? 'dark' : 'light');
+      }
+    };
+
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, [storageEnabled, isMounted]);
+
+  // Context value
+  const contextValue: BrandContextType = {
+    theme,
+    setTheme,
+    direction,
+    setDirection,
+    toggleDirection,
+    brandConfig: ALPHA_BRAND_CONFIG,
+    isLoading,
+    setIsLoading,
+    isMounted
+  };
+
+  return (
+    <BrandContext.Provider value={contextValue}>
+      {children}
+    </BrandContext.Provider>
+  );
+};
+
+/**
+ * Hook to use Brand Context
+ */
+export const useBrand = (): BrandContextType => {
+  const context = useContext(BrandContext);
+  
+  if (context === undefined) {
+    throw new Error('useBrand must be used within a BrandProvider');
+  }
+  
+  return context;
+};
+
+/**
+ * Hook for theme management
+ */
+export const useTheme = () => {
+  const { theme, setTheme, isMounted } = useBrand();
+  
+  const toggleTheme = useCallback(() => {
+    const themeOrder: AlphaTheme[] = ['light', 'dark', 'gold'];
+    const currentIndex = themeOrder.indexOf(theme);
+    const nextIndex = (currentIndex + 1) % themeOrder.length;
+    setTheme(themeOrder[nextIndex]);
+  }, [theme, setTheme]);
+  
+  return {
+    theme,
+    setTheme,
+    toggleTheme,
+    isMounted,
+    isDark: theme === 'dark',
+    isLight: theme === 'light',
+    isGold: theme === 'gold'
+  };
+};
+
+/**
+ * Hook for direction management
+ */
+export const useDirection = () => {
+  const { direction, setDirection, toggleDirection, isMounted } = useBrand();
+  
+  return {
+    direction,
+    setDirection,
+    toggleDirection,
+    isMounted,
+    isRTL: direction === 'rtl',
+    isLTR: direction === 'ltr'
+  };
+};
+
+/**
+ * Hook for loading state management
+ */
+export const useLoading = () => {
+  const { isLoading, setIsLoading } = useBrand();
+  
+  const startLoading = useCallback(() => setIsLoading(true), [setIsLoading]);
+  const stopLoading = useCallback(() => setIsLoading(false), [setIsLoading]);
+  
+  return {
+    isLoading,
+    setIsLoading,
+    startLoading,
+    stopLoading
+  };
+};
+
+/**
+ * Higher-Order Component for Brand Context
+ */
+export function withBrand<P extends object>(
+  Component: React.ComponentType<P>
+): React.ComponentType<P> {
+  const WithBrandComponent = (props: P) => {
+    const brandContext = useBrand();
+    
+    return (
+      <Component
+        {...props}
+        brand={brandContext}
+      />
+    );
+  };
+  
+  WithBrandComponent.displayName = `withBrand(${Component.displayName || Component.name})`;
+  
+  return WithBrandComponent;
+}
+
+/**
+ * Brand Initialization Hook
+ * Useful for components that need to wait for brand context to be ready
+ */
+export const useBrandInit = () => {
+  const { isMounted, theme, direction, brandConfig } = useBrand();
+  const [isReady, setIsReady] = useState(false);
+  
+  useEffect(() => {
+    if (isMounted) {
+      // Small delay to ensure DOM is updated
+      const timer = setTimeout(() => setIsReady(true), 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isMounted]);
+  
+  return {
+    isReady: isReady && isMounted,
+    isMounted,
+    theme,
+    direction,
+    brandConfig
+  };
+};
+
+/**
+ * Theme Detection Hook
+ * Provides information about current theme and system preferences
+ */
+export const useThemeDetection = () => {
+  const { theme } = useBrand();
+  const [systemPrefersDark, setSystemPrefersDark] = useState(false);
+  const [systemPrefersReducedMotion, setSystemPrefersReducedMotion] = useState(false);
+  
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    // Dark mode detection
+    const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    setSystemPrefersDark(darkModeQuery.matches);
+    
+    const handleDarkModeChange = (e: MediaQueryListEvent) => {
+      setSystemPrefersDark(e.matches);
+    };
+    
+    darkModeQuery.addEventListener('change', handleDarkModeChange);
+    
+    // Reduced motion detection
+    const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setSystemPrefersReducedMotion(reducedMotionQuery.matches);
+    
+    const handleReducedMotionChange = (e: MediaQueryListEvent) => {
+      setSystemPrefersReducedMotion(e.matches);
+    };
+    
+    reducedMotionQuery.addEventListener('change', handleReducedMotionChange);
+    
+    return () => {
+      darkModeQuery.removeEventListener('change', handleDarkModeChange);
+      reducedMotionQuery.removeEventListener('change', handleReducedMotionChange);
+    };
+  }, []);
+  
+  return {
+    currentTheme: theme,
+    systemPrefersDark,
+    systemPrefersReducedMotion,
+    isDarkMode: theme === 'dark' || (theme === 'light' && systemPrefersDark),
+    shouldReduceMotion: systemPrefersReducedMotion
+  };
+};
+
+export default BrandProvider;

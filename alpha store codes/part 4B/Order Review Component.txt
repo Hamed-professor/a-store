@@ -1,0 +1,248 @@
+// src/components/checkout/OrderReview.tsx
+import React from 'react';
+import { Package, MapPin, CreditCard, Truck, Edit } from 'lucide-react';
+import { Order, OrderItem, ShippingAddress, ShippingMethod } from '../../types/order';
+
+interface OrderReviewProps {
+  items: OrderItem[];
+  shippingAddress: ShippingAddress;
+  shippingMethod: ShippingMethod;
+  paymentMethod: string;
+  subtotal: number;
+  shippingCost: number;
+  tax: number;
+  total: number;
+  onEditShipping?: () => void;
+  onEditPayment?: () => void;
+}
+
+export const OrderReview: React.FC<OrderReviewProps> = ({
+  items,
+  shippingAddress,
+  shippingMethod,
+  paymentMethod,
+  subtotal,
+  shippingCost,
+  tax,
+  total,
+  onEditShipping,
+  onEditPayment
+}) => {
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('fa-IR').format(price) + ' تومان';
+  };
+
+  const getPaymentMethodName = (method: string) => {
+    const methods: Record<string, string> = {
+      zarinpal: 'زرین‌پال',
+      mellat: 'بانک ملت',
+      parsian: 'بانک پارسیان',
+      saderat: 'بانک صادرات',
+      card: 'کارت بانکی'
+    };
+    return methods[method] || method;
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Order Items */}
+      <div className="bg-white rounded-xl shadow-sm border p-6">
+        <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center">
+          <Package className="w-5 h-5 ml-2 text-alpha-600" />
+          محصولات سفارش ({items.length} مورد)
+        </h3>
+
+        <div className="space-y-4">
+          {items.map(item => (
+            <div key={item.id} className="flex items-center space-x-4 space-x-reverse p-4 border border-gray-100 rounded-lg">
+              <img
+                src={item.image}
+                alt={item.namePersian}
+                className="w-16 h-16 object-cover rounded-lg"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = '/images/placeholder.jpg';
+                }}
+              />
+              
+              <div className="flex-1">
+                <h4 className="font-medium text-gray-900">{item.namePersian}</h4>
+                <p className="text-sm text-gray-600">{item.name}</p>
+                {item.variant && (
+                  <div className="flex space-x-2 space-x-reverse mt-1">
+                    {item.variant.size && (
+                      <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                        سایز: {item.variant.size}
+                      </span>
+                    )}
+                    {item.variant.color && (
+                      <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                        رنگ: {item.variant.color}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="text-center">
+                <p className="text-sm text-gray-600">تعداد</p>
+                <p className="font-medium">{item.quantity}</p>
+              </div>
+
+              <div className="text-left">
+                <p className="text-sm text-gray-600">قیمت واحد</p>
+                <p className="font-medium text-alpha-600">
+                  {formatPrice(item.price)}
+                </p>
+              </div>
+
+              <div className="text-left">
+                <p className="text-sm text-gray-600">جمع</p>
+                <p className="font-bold text-alpha-600">
+                  {formatPrice(item.price * item.quantity)}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Shipping Information */}
+      <div className="bg-white rounded-xl shadow-sm border p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-lg font-bold text-gray-900 flex items-center">
+            <MapPin className="w-5 h-5 ml-2 text-alpha-600" />
+            اطلاعات ارسال
+          </h3>
+          {onEditShipping && (
+            <button
+              onClick={onEditShipping}
+              className="text-alpha-600 hover:text-alpha-700 flex items-center text-sm"
+            >
+              <Edit className="w-4 h-4 ml-1" />
+              ویرایش
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <h4 className="font-medium text-gray-900 mb-2">آدرس تحویل</h4>
+            <div className="text-sm text-gray-600 space-y-1">
+              <p>{shippingAddress.firstName} {shippingAddress.lastName}</p>
+              <p>{shippingAddress.phoneNumber}</p>
+              <p>{shippingAddress.address}</p>
+              <p>{shippingAddress.city}، {shippingAddress.province}</p>
+              <p>کد پستی: {shippingAddress.postalCode}</p>
+              {shippingAddress.specialInstructions && (
+                <p className="mt-2 text-xs bg-yellow-50 border border-yellow-200 rounded p-2">
+                  توضیحات: {shippingAddress.specialInstructions}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <h4 className="font-medium text-gray-900 mb-2">روش ارسال</h4>
+            <div className="bg-alpha-50 border border-alpha-200 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-alpha-900">{shippingMethod.namePersian}</p>
+                  <p className="text-sm text-alpha-700">{shippingMethod.description}</p>
+                </div>
+                <span className="font-bold text-alpha-600">
+                  {formatPrice(shippingMethod.price)}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Payment Information */}
+      <div className="bg-white rounded-xl shadow-sm border p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-lg font-bold text-gray-900 flex items-center">
+            <CreditCard className="w-5 h-5 ml-2 text-alpha-600" />
+            اطلاعات پرداخت
+          </h3>
+          {onEditPayment && (
+            <button
+              onClick={onEditPayment}
+              className="text-alpha-600 hover:text-alpha-700 flex items-center text-sm"
+            >
+              <Edit className="w-4 h-4 ml-1" />
+              ویرایش
+            </button>
+          )}
+        </div>
+
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-center space-x-3 space-x-reverse">
+            <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+              <CreditCard className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <p className="font-medium text-green-900">
+                {getPaymentMethodName(paymentMethod)}
+              </p>
+              <p className="text-sm text-green-700">
+                پرداخت آنلاین امن
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Order Summary */}
+      <div className="bg-white rounded-xl shadow-sm border p-6">
+        <h3 className="text-lg font-bold text-gray-900 mb-6">خلاصه سفارش</h3>
+        
+        <div className="space-y-4">
+          <div className="flex justify-between text-gray-600">
+            <span>مجموع محصولات:</span>
+            <span>{formatPrice(subtotal)}</span>
+          </div>
+          
+          <div className="flex justify-between text-gray-600">
+            <span>هزینه ارسال:</span>
+            <span>{formatPrice(shippingCost)}</span>
+          </div>
+          
+          <div className="flex justify-between text-gray-600">
+            <span>مالیات (۹٪):</span>
+            <span>{formatPrice(tax)}</span>
+          </div>
+          
+          <hr className="border-gray-200" />
+          
+          <div className="flex justify-between text-xl font-bold text-gray-900">
+            <span>مجموع نهایی:</span>
+            <span className="text-alpha-600">{formatPrice(total)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Terms and Conditions */}
+      <div className="bg-gray-50 rounded-xl p-6">
+        <label className="flex items-start space-x-3 space-x-reverse">
+          <input
+            type="checkbox"
+            required
+            className="w-4 h-4 mt-1 text-alpha-600 border-gray-300 rounded focus:ring-alpha-500"
+          />
+          <div className="text-sm text-gray-700">
+            <span>با </span>
+            <button className="text-alpha-600 hover:text-alpha-700 underline">
+              قوانین و مقررات
+            </button>
+            <span> و </span>
+            <button className="text-alpha-600 hover:text-alpha-700 underline">
+              سیاست حریم خصوصی
+            </button>
+            <span> Î± Store موافقم و شرایط خرید و فروش را می‌پذیرم.</span>
+          </div>
+        </label>
+      </div>
+    </div>
+  );
+};

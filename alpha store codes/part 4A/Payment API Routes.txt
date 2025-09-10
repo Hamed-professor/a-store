@@ -1,0 +1,285 @@
+// pages/api/payments/request.ts
+import type { NextApiRequest, NextApiResponse } from 'next';
+import { PaymentRequest, PaymentResponse } from '../../../src/types/payment';
+import zarinpalService from '../../../src/services/payments/zarinpal';
+import payirService from '../../../src/services/payments/payir';
+import nextpayService from '../../../src/services/payments/nextpay';
+import { validateAmount, sanitizePaymentLog } from '../../../src/utils/payment';
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse<PaymentResponse>) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({
+      success: false,
+      gatewayId: '',
+      message: 'Method not allowed',
+      messagePersian: 'متد مجاز نیست'
+    });
+  }
+
+  try {
+    const paymentData: PaymentRequest = req.body;
+
+    // Validate required fields
+    if (!paymentData.orderId || !paymentData.amount || !paymentData.gateway) {
+      return res.status(400).json({
+        success: false,
+        gatewayId: paymentData.gateway || '',
+        message: 'Missing required fields',
+        messagePersian: 'فیلدهای الزامی وارد نشده‌اند',
+        errorCode: 'INVALID_REQUEST'
+      });
+    }
+
+    // Validate amount
+    const amountValidation = validateAmount(paymentData.amount, paymentData.currency);
+    if (!amountValidation.isValid && amountValidation.error) {
+      return res.status(400).json({
+        success: false,
+        gatewayId: paymentData.gateway,
+        message: amountValidation.error.message,
+        messagePersian: amountValidation.error.messagePersian,
+        errorCode: amountValidation.error.code
+      });
+    }
+
+    // Rate limiting (simple implementation)
+    const clientIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+    // In production, use Redis or database for rate limiting
+
+    // Log payment request
+    console.log('Payment request:', sanitizePaymentLog({
+      orderId: paymentData.orderId,
+      gateway: paymentData.gateway,
+      amount: paymentData.amount,
+      currency: paymentData.currency,
+      ip: clientIp,
+      timestamp: new Date().toISOString()
+    }));
+
+    let result: PaymentResponse;
+
+    // Route to appropriate gateway service
+    switch (paymentData.gateway.toLowerCase()) {
+      case 'zarinpal':
+        result = await zarinpalService.requestPayment(paymentData);
+        break;
+      case 'payir':
+        result = await payirService.requestPayment(paymentData);
+        break;
+      case 'nextpay':
+        result = await nextpayService.requestPayment(paymentData);
+        break;
+      default:
+        return res.status(400).json({
+          success: false,
+          gatewayId: paymentData.gateway,
+          message: 'Unsupported payment gateway',
+          messagePersian: 'درگاه پرداخت پشتیبانی نمی‌شود',
+          errorCode: 'UNSUPPORTED_GATEWAY'
+        });
+    }
+
+    // Log payment response
+    console.log('Payment response:', sanitizePaymentLog({
+      orderId: paymentData.orderId,
+      gateway: paymentData.gateway,
+      success: result.success,
+      transactionId: result.authority || result.token || result.transactionId,
+      timestamp: new Date().toISOString()
+    }));
+
+    // Store payment log in database (implement as needed)
+    // await storePaymentLog({
+    //   orderId: paymentData.orderId,
+    //   userId: paymentData.userId,
+    //   gatewayId: paymentData.gateway,
+    //   amount: paymentData.amount,
+    //   currency: paymentData.currency,
+    //   status: result.success ? 'processing' : 'failed',
+    //   requestData: sanitizePaymentLog(paymentData),
+    //   responseData: sanitizePaymentLog(result),
+    //   createdAt: new Date()
+    // });
+
+    res.status(result.success ? 200 : 400).json(result);
+  } catch (error) {
+    console.error('Payment request error:', error);
+    
+    res.status(500).json({
+      success: false,
+      gatewayId: req.body?.gateway || '',
+      message: 'Internal server error',
+      messagePersian: 'خطای داخلی سرور',
+      errorCode: 'INTERNAL_ERROR'
+    });
+  }
+}
+
+// pages/api/payments/verify.ts
+import type { NextApiRequest, NextApiResponse } from 'next';
+import { PaymentVerification } from '../../../src/types/payment';
+import zarinpalService from '../../../src/services/payments/zarinpal';
+import payirService from '../../../src/services/payments/payir';
+import nextpayService from '../../../src/services/payments/nextpay';
+import { parseCallbackParams, sanitizePaymentLog } from '../../../src/utils/payment';
+
+interface VerifyResponse {
+  success: boolean;
+  verification?: PaymentVerification;
+  message: string;
+  messagePersian: string;
+}
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse<VerifyResponse>) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({
+      success: false,
+      message: 'Method not allowed',
+      messagePersian: 'متد مجاز نیست'
+    });
+  }
+
+  try {
+    const params = parseCallbackParams(req.body);
+    
+    if (!params.gateway) {
+      return res.status(400).json({
+        success: false,
+        message: 'Gateway not specified',
+        messagePersian: 'درگاه پرداخت مشخص نشده است'
+      });
+    }
+
+    // Log verification attempt
+    console.log('Payment verification attempt:', sanitizePaymentLog({
+      gateway: params.gateway,
+      orderId: params.orderId,
+      authority: params.authority,
+      token: params.token,
+      transId: params.transId,
+      status: params.status,
+      timestamp: new Date().toISOString()
+    }));
+
+    let verification: PaymentVerification | null = null;
+
+    // Get payment details from database (implement as needed)
+    // const paymentLog = await getPaymentLogByOrderId(params.orderId);
+    // if (!paymentLog) {
+    //   return res.status(404).json({
+    //     success: false,
+    //     message: 'Payment record not found',
+    //     messagePersian: 'رکورد پرداخت یافت نشد'
+    //   });
+    // }
+
+    // For demo purposes, assume amount and currency
+    const amount = 100000; // Get from database
+    const currency: 'IRR' | 'IRT' = 'IRT'; // Get from database
+
+    // Route to appropriate gateway service for verification
+    switch (params.gateway.toLowerCase()) {
+      case 'zarinpal':
+        if (params.authority) {
+          verification = await zarinpalService.verifyPayment(params.authority, amount, currency);
+        }
+        break;
+      case 'payir':
+        if (params.token) {
+          verification = await payirService.verifyPayment(params.token, amount, currency);
+        }
+        break;
+      case 'nextpay':
+        if (params.transId) {
+          verification = await nextpayService.verifyPayment(params.transId, amount, currency);
+        }
+        break;
+      default:
+        return res.status(400).json({
+          success: false,
+          message: 'Unsupported payment gateway',
+          messagePersian: 'درگاه پرداخت پشتیبانی نمی‌شود'
+        });
+    }
+
+    if (verification) {
+      // Update payment log in database (implement as needed)
+      // await updatePaymentLog(params.orderId, {
+      //   status: 'completed',
+      //   transactionId: verification.transactionId,
+      //   verificationData: sanitizePaymentLog(verification),
+      //   verifiedAt: new Date()
+      // });
+
+      console.log('Payment verification successful:', sanitizePaymentLog({
+        orderId: verification.orderId,
+        transactionId: verification.transactionId,
+        amount: verification.amount,
+        gateway: verification.gatewayId,
+        timestamp: new Date().toISOString()
+      }));
+
+      return res.status(200).json({
+        success: true,
+        verification,
+        message: 'Payment verified successfully',
+        messagePersian: 'پرداخت با موفقیت تایید شد'
+      });
+    } else {
+      // Update payment log as failed
+      // await updatePaymentLog(params.orderId, {
+      //   status: 'failed',
+      //   errorMessage: 'Verification failed',
+      //   updatedAt: new Date()
+      // });
+
+      console.log('Payment verification failed:', sanitizePaymentLog({
+        gateway: params.gateway,
+        orderId: params.orderId,
+        reason: 'Verification returned null',
+        timestamp: new Date().toISOString()
+      }));
+
+      return res.status(400).json({
+        success: false,
+        message: 'Payment verification failed',
+        messagePersian: 'تایید پرداخت ناموفق بود'
+      });
+    }
+  } catch (error) {
+    console.error('Payment verification error:', error);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      messagePersian: 'خطای داخلی سرور'
+    });
+  }
+}
+
+// pages/api/payments/zarinpal.ts
+import type { NextApiRequest, NextApiResponse } from 'next';
+import zarinpalService from '../../../src/services/payments/zarinpal';
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method === 'POST') {
+    // Handle ZarinPal webhook/callback
+    try {
+      const { Authority, Status } = req.body;
+      
+      if (Status === 'OK' && Authority) {
+        // Payment was successful, but still needs verification
+        // Redirect to verification page
+        res.redirect(`/payment/callback?gateway=zarinpal&authority=${Authority}&status=${Status}`);
+      } else {
+        // Payment was cancelled or failed
+        res.redirect(`/payment/callback?gateway=zarinpal&status=${Status || 'FAILED'}`);
+      }
+    } catch (error) {
+      console.error('ZarinPal callback error:', error);
+      res.redirect('/payment/callback?gateway=zarinpal&status=ERROR');
+    }
+  } else {
+    res.status(405).json({ error: 'Method not allowed' });
+  }
+}

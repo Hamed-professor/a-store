@@ -1,0 +1,476 @@
+// src/components/product/ProductGallery.tsx
+
+import React, { useState, useRef, useEffect } from 'react';
+import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, X, RotateCcw, Maximize } from 'lucide-react';
+import { ProductImage } from '../../types/product';
+import { handleImageError, createImagePlaceholder } from '../../utils/images';
+
+interface ProductGalleryProps {
+  images: ProductImage[];
+  locale?: 'fa' | 'en';
+  className?: string;
+  enableZoom?: boolean;
+  enableLightbox?: boolean;
+  enable360View?: boolean;
+  showThumbnails?: boolean;
+  autoPlay?: boolean;
+  autoPlayInterval?: number;
+}
+
+interface LightboxProps {
+  images: ProductImage[];
+  currentIndex: number;
+  isOpen: boolean;
+  onClose: () => void;
+  onNext: () => void;
+  onPrevious: () => void;
+  locale?: 'fa' | 'en';
+}
+
+// Lightbox Modal Component
+const Lightbox: React.FC<LightboxProps> = ({
+  images,
+  currentIndex,
+  isOpen,
+  onClose,
+  onNext,
+  onPrevious,
+  locale = 'fa'
+}) => {
+  const [zoom, setZoom] = useState(1);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const imageRef = useRef<HTMLImageElement>(null);
+
+  const currentImage = images[currentIndex];
+
+  // Reset zoom and position when image changes
+  useEffect(() => {
+    setZoom(1);
+    setPosition({ x: 0, y: 0 });
+  }, [currentIndex]);
+
+  // Handle keyboard navigation
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      switch (e.key) {
+        case 'Escape':
+          onClose();
+          break;
+        case 'ArrowLeft':
+          if (locale === 'fa') onNext(); else onPrevious();
+          break;
+        case 'ArrowRight':
+          if (locale === 'fa') onPrevious(); else onNext();
+          break;
+        case '+':
+        case '=':
+          setZoom(prev => Math.min(prev + 0.5, 4));
+          break;
+        case '-':
+          setZoom(prev => Math.max(prev - 0.5, 1));
+          break;
+        case '0':
+          setZoom(1);
+          setPosition({ x: 0, y: 0 });
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose, onNext, onPrevious, locale]);
+
+  const handleZoomIn = () => setZoom(prev => Math.min(prev + 0.5, 4));
+  const handleZoomOut = () => setZoom(prev => Math.max(prev - 0.5, 1));
+  const handleResetZoom = () => {
+    setZoom(1);
+    setPosition({ x: 0, y: 0 });
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (zoom > 1) {
+      setIsDragging(true);
+      setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (isDragging && zoom > 1) {
+      setPosition({
+        x: e.clientX - dragStart.x,
+        y: e.clientY - dragStart.y
+      });
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  if (!isOpen || !currentImage) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black bg-opacity-95 flex items-center justify-center">
+      {/* Header */}
+      <div className="absolute top-0 left-0 right-0 z-10 p-4 bg-gradient-to-b from-black/50 to-transparent">
+        <div className="flex justify-between items-center text-white">
+          <div className="text-sm">
+            {currentIndex + 1} / {images.length}
+          </div>
+          
+          {/* Controls */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleZoomOut}
+              disabled={zoom <= 1}
+              className="p-2 bg-black/50 rounded-full hover:bg-black/70 disabled:opacity-50 disabled:cursor-not-allowed"
+              title={locale === 'fa' ? 'بازنشانی' : 'Reset'}
+            >
+              <RotateCcw className="w-5 h-5" />
+            </button>
+            
+            <button
+              onClick={onClose}
+              className="p-2 bg-black/50 rounded-full hover:bg-black/70"
+              title={locale === 'fa' ? 'بستن' : 'Close'}
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Navigation Buttons */}
+      {images.length > 1 && (
+        <>
+          <button
+            onClick={locale === 'fa' ? onNext : onPrevious}
+            className="absolute left-4 top-1/2 -translate-y-1/2 z-10 p-3 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors duration-200"
+            title={locale === 'fa' ? 'تصویر بعدی' : 'Previous Image'}
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+          
+          <button
+            onClick={locale === 'fa' ? onPrevious : onNext}
+            className="absolute right-4 top-1/2 -translate-y-1/2 z-10 p-3 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors duration-200"
+            title={locale === 'fa' ? 'تصویر قبلی' : 'Next Image'}
+          >
+            <ChevronRight className="w-6 h-6" />
+          </button>
+        </>
+      )}
+
+      {/* Image Container */}
+      <div 
+        className="relative flex-1 flex items-center justify-center overflow-hidden cursor-move"
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+      >
+        <img
+          ref={imageRef}
+          src={currentImage.url}
+          alt={currentImage.alt}
+          className="max-w-none transition-transform duration-200"
+          style={{
+            transform: `scale(${zoom}) translate(${position.x / zoom}px, ${position.y / zoom}px)`,
+            cursor: zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default'
+          }}
+          draggable={false}
+          onError={handleImageError}
+        />
+      </div>
+
+      {/* Thumbnail Strip */}
+      {images.length > 1 && (
+        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/50 to-transparent">
+          <div className="flex justify-center gap-2 overflow-x-auto max-w-full">
+            {images.map((image, index) => (
+              <button
+                key={image.id}
+                onClick={() => {
+                  // This would trigger parent component to change currentIndex
+                  // For now, we'll assume parent handles this
+                }}
+                className={`
+                  relative flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all duration-200
+                  ${index === currentIndex 
+                    ? 'border-yellow-400 opacity-100' 
+                    : 'border-transparent opacity-60 hover:opacity-80'
+                  }
+                `}
+              >
+                <img
+                  src={image.url}
+                  alt={image.alt}
+                  className="w-full h-full object-cover"
+                  onError={handleImageError}
+                />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Main Gallery Component
+const ProductGallery: React.FC<ProductGalleryProps> = ({
+  images,
+  locale = 'fa',
+  className = '',
+  enableZoom = true,
+  enableLightbox = true,
+  enable360View = false,
+  showThumbnails = true,
+  autoPlay = false,
+  autoPlayInterval = 3000
+}) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+  const [isZoomed, setIsZoomed] = useState(false);
+  const [zoomPosition, setZoomPosition] = useState({ x: 0, y: 0 });
+  const [imageLoading, setImageLoading] = useState(true);
+  const mainImageRef = useRef<HTMLImageElement>(null);
+  const autoPlayRef = useRef<NodeJS.Timeout>();
+
+  const currentImage = images[currentIndex] || images[0];
+
+  // Auto-play functionality
+  useEffect(() => {
+    if (autoPlay && images.length > 1) {
+      autoPlayRef.current = setInterval(() => {
+        setCurrentIndex(prev => (prev + 1) % images.length);
+      }, autoPlayInterval);
+
+      return () => {
+        if (autoPlayRef.current) {
+          clearInterval(autoPlayRef.current);
+        }
+      };
+    }
+  }, [autoPlay, autoPlayInterval, images.length]);
+
+  // Stop auto-play on user interaction
+  const stopAutoPlay = () => {
+    if (autoPlayRef.current) {
+      clearInterval(autoPlayRef.current);
+      autoPlayRef.current = undefined;
+    }
+  };
+
+  const goToNext = () => {
+    stopAutoPlay();
+    setCurrentIndex(prev => (prev + 1) % images.length);
+  };
+
+  const goToPrevious = () => {
+    stopAutoPlay();
+    setCurrentIndex(prev => (prev - 1 + images.length) % images.length);
+  };
+
+  const goToIndex = (index: number) => {
+    stopAutoPlay();
+    setCurrentIndex(index);
+  };
+
+  const openLightbox = () => {
+    if (enableLightbox) {
+      setIsLightboxOpen(true);
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!enableZoom || !mainImageRef.current) return;
+
+    const rect = mainImageRef.current.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    
+    setZoomPosition({ x, y });
+  };
+
+  const handleMouseEnter = () => {
+    if (enableZoom) setIsZoomed(true);
+  };
+
+  const handleMouseLeave = () => {
+    if (enableZoom) setIsZoomed(false);
+  };
+
+  if (!images || images.length === 0) {
+    return (
+      <div className={`bg-gray-100 rounded-lg flex items-center justify-center ${className}`}>
+        <div className="text-center text-gray-500">
+          <div className="text-4xl mb-2">📷</div>
+          <div>{locale === 'fa' ? 'تصویری موجود نیست' : 'No image available'}</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`space-y-4 ${className}`}>
+      {/* Main Image Container */}
+      <div className="relative group">
+        <div 
+          className="relative aspect-square bg-gray-100 rounded-xl overflow-hidden cursor-crosshair"
+          onMouseMove={handleMouseMove}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+          onClick={openLightbox}
+        >
+          {/* Main Image */}
+          <img
+            ref={mainImageRef}
+            src={currentImage.url}
+            alt={currentImage.alt}
+            className={`
+              w-full h-full object-cover transition-all duration-500
+              ${isZoomed ? 'scale-150' : 'scale-100'}
+              ${imageLoading ? 'opacity-0' : 'opacity-100'}
+            `}
+            style={isZoomed ? {
+              transformOrigin: `${zoomPosition.x}% ${zoomPosition.y}%`
+            } : {}}
+            onLoad={() => setImageLoading(false)}
+            onError={handleImageError}
+            draggable={false}
+          />
+
+          {/* Loading State */}
+          {imageLoading && (
+            <div className="absolute inset-0 bg-gray-200 animate-pulse flex items-center justify-center">
+              <div className="text-gray-400">{locale === 'fa' ? 'در حال بارگذاری...' : 'Loading...'}</div>
+            </div>
+          )}
+
+          {/* Navigation Arrows */}
+          {images.length > 1 && (
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  locale === 'fa' ? goToNext() : goToPrevious();
+                }}
+                className="absolute left-2 top-1/2 -translate-y-1/2 z-10 p-2 bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-black/70"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  locale === 'fa' ? goToPrevious() : goToNext();
+                }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 z-10 p-2 bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-black/70"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </>
+          )}
+
+          {/* Zoom Indicator */}
+          {enableZoom && (
+            <div className="absolute top-3 right-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+              <div className="bg-black/50 text-white px-2 py-1 rounded-full text-xs flex items-center gap-1">
+                <Maximize className="w-3 h-3" />
+                <span>{locale === 'fa' ? 'کلیک برای بزرگنمایی' : 'Click to zoom'}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Image Counter */}
+          {images.length > 1 && (
+            <div className="absolute bottom-3 left-3 z-10 bg-black/50 text-white px-2 py-1 rounded-full text-xs">
+              {currentIndex + 1} / {images.length}
+            </div>
+          )}
+
+          {/* Alpha Store Watermark */}
+          <div className="absolute bottom-3 right-3 z-10 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black px-2 py-1 rounded-full text-xs font-bold opacity-70">
+            Î± Store
+          </div>
+        </div>
+      </div>
+
+      {/* Thumbnails */}
+      {showThumbnails && images.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto pb-2">
+          {images.map((image, index) => (
+            <button
+              key={image.id}
+              onClick={() => goToIndex(index)}
+              className={`
+                relative flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all duration-200
+                ${index === currentIndex 
+                  ? 'border-yellow-400 opacity-100 scale-105' 
+                  : 'border-gray-200 opacity-70 hover:opacity-100 hover:border-gray-300'
+                }
+              `}
+            >
+              <img
+                src={image.url}
+                alt={image.alt}
+                className="w-full h-full object-cover"
+                onError={handleImageError}
+              />
+              
+              {/* Active indicator */}
+              {index === currentIndex && (
+                <div className="absolute inset-0 bg-yellow-400/20" />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* 360° View Button (placeholder for future implementation) */}
+      {enable360View && (
+        <button className="w-full py-3 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium text-gray-700 transition-colors duration-200 flex items-center justify-center gap-2">
+          <RotateCcw className="w-5 h-5" />
+          <span>{locale === 'fa' ? 'نمای ۳۶۰ درجه' : '360° View'}</span>
+        </button>
+      )}
+
+      {/* Lightbox */}
+      <Lightbox
+        images={images}
+        currentIndex={currentIndex}
+        isOpen={isLightboxOpen}
+        onClose={() => setIsLightboxOpen(false)}
+        onNext={goToNext}
+        onPrevious={goToPrevious}
+        locale={locale}
+      />
+    </div>
+  );
+};
+
+export default ProductGallery;کوچک‌نمایی' : 'Zoom Out'}
+            >
+              <ZoomOut className="w-5 h-5" />
+            </button>
+            
+            <span className="text-sm px-2">{Math.round(zoom * 100)}%</span>
+            
+            <button
+              onClick={handleZoomIn}
+              disabled={zoom >= 4}
+              className="p-2 bg-black/50 rounded-full hover:bg-black/70 disabled:opacity-50 disabled:cursor-not-allowed"
+              title={locale === 'fa' ? 'بزرگ‌نمایی' : 'Zoom In'}
+            >
+              <ZoomIn className="w-5 h-5" />
+            </button>
+            
+            <button
+              onClick={handleResetZoom}
+              className="p-2 bg-black/50 rounded-full hover:bg-black/70"
+              title={locale === 'fa' ? '

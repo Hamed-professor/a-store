@@ -1,0 +1,1954 @@
+# Î± Store - Part 7B: Testing Suite & Final Integration
+
+## 📁 Project Structure
+```
+alpha-store-testing/
+├── 📁 tests/
+│   ├── 📁 frontend/
+│   │   ├── 📁 components/
+│   │   ├── 📁 hooks/
+│   │   └── 📁 utils/
+│   ├── 📁 backend/
+│   │   ├── 📁 controllers/
+│   │   ├── 📁 models/
+│   │   └── 📁 services/
+│   └── 📁 e2e/
+│       ├── 📁 user-flows/
+│       └── 📁 admin-flows/
+├── 📁 src/
+│   ├── 📁 components/
+│   │   ├── 📁 legal/
+│   │   └── 📁 seo/
+│   └── 📁 utils/
+├── 📁 pages/legal/
+├── 📁 docs/
+├── 📁 scripts/
+└── 📁 public/
+```
+
+## 🧪 Testing Configuration
+
+### jest.config.js
+```javascript
+module.exports = {
+  testEnvironment: 'jsdom',
+  setupFilesAfterEnv: ['<rootDir>/src/setupTests.ts'],
+  moduleNameMapping: {
+    '^@/(.*)$': '<rootDir>/src/$1',
+    '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
+  },
+  collectCoverageFrom: [
+    'src/**/*.{ts,tsx}',
+    '!src/**/*.d.ts',
+    '!src/index.tsx',
+    '!src/reportWebVitals.ts',
+  ],
+  coverageThreshold: {
+    global: {
+      branches: 80,
+      functions: 80,
+      lines: 80,
+      statements: 80,
+    },
+  },
+  testMatch: [
+    '<rootDir>/tests/**/*.test.{ts,tsx}',
+    '<rootDir>/src/**/*.test.{ts,tsx}',
+  ],
+};
+```
+
+### cypress.config.js
+```javascript
+const { defineConfig } = require('cypress');
+
+module.exports = defineConfig({
+  e2e: {
+    baseUrl: 'http://localhost:3000',
+    supportFile: 'tests/e2e/support/commands.ts',
+    specPattern: 'tests/e2e/**/*.cy.{js,jsx,ts,tsx}',
+    viewportWidth: 1280,
+    viewportHeight: 720,
+    video: true,
+    screenshotOnRunFailure: true,
+  },
+  component: {
+    devServer: {
+      framework: 'create-react-app',
+      bundler: 'webpack',
+    },
+  },
+});
+```
+
+### setupTests.ts
+```typescript
+import '@testing-library/jest-dom';
+import { configure } from '@testing-library/react';
+
+// Configure testing library
+configure({
+  testIdAttribute: 'data-testid',
+});
+
+// Mock IntersectionObserver
+global.IntersectionObserver = class IntersectionObserver {
+  constructor() {}
+  disconnect() {}
+  observe() {}
+  unobserve() {}
+};
+
+// Mock window.matchMedia
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: jest.fn().mockImplementation(query => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: jest.fn(),
+    removeListener: jest.fn(),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
+    dispatchEvent: jest.fn(),
+  })),
+});
+
+// Mock localStorage
+const localStorageMock = {
+  getItem: jest.fn(),
+  setItem: jest.fn(),
+  removeItem: jest.fn(),
+  clear: jest.fn(),
+};
+global.localStorage = localStorageMock;
+```
+
+## 🔍 Frontend Testing
+
+### tests/frontend/components/ProductCard.test.tsx
+```typescript
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { BrowserRouter } from 'react-router-dom';
+import { Provider } from 'react-redux';
+import { configureStore } from '@reduxjs/toolkit';
+import ProductCard from '@/components/products/ProductCard';
+import cartSlice from '@/store/slices/cartSlice';
+
+const mockStore = configureStore({
+  reducer: {
+    cart: cartSlice,
+  },
+});
+
+const mockProduct = {
+  id: '1',
+  title: 'محصول تست',
+  price: 100000,
+  discountPrice: 80000,
+  image: '/test-image.jpg',
+  rating: 4.5,
+  reviewCount: 10,
+  inStock: true,
+};
+
+const renderWithProviders = (component: React.ReactElement) => {
+  return render(
+    <Provider store={mockStore}>
+      <BrowserRouter>
+        {component}
+      </BrowserRouter>
+    </Provider>
+  );
+};
+
+describe('ProductCard', () => {
+  test('renders product information correctly', () => {
+    renderWithProviders(<ProductCard product={mockProduct} />);
+    
+    expect(screen.getByText('محصول تست')).toBeInTheDocument();
+    expect(screen.getByText('100,000 تومان')).toBeInTheDocument();
+    expect(screen.getByText('80,000 تومان')).toBeInTheDocument();
+  });
+
+  test('handles Persian numbers correctly', () => {
+    renderWithProviders(<ProductCard product={mockProduct} />);
+    
+    // Check if Persian number conversion is working
+    const priceElement = screen.getByText(/تومان/);
+    expect(priceElement).toBeInTheDocument();
+  });
+
+  test('adds product to cart when button clicked', async () => {
+    renderWithProviders(<ProductCard product={mockProduct} />);
+    
+    const addButton = screen.getByRole('button', { name: /افزودن به سبد/ });
+    fireEvent.click(addButton);
+
+    await waitFor(() => {
+      // Verify cart state updated
+      expect(mockStore.getState().cart.items.length).toBeGreaterThan(0);
+    });
+  });
+
+  test('displays out of stock state correctly', () => {
+    const outOfStockProduct = { ...mockProduct, inStock: false };
+    renderWithProviders(<ProductCard product={outOfStockProduct} />);
+    
+    expect(screen.getByText('ناموجود')).toBeInTheDocument();
+    expect(screen.getByRole('button')).toBeDisabled();
+  });
+
+  test('displays discount badge when product has discount', () => {
+    renderWithProviders(<ProductCard product={mockProduct} />);
+    
+    const discountPercentage = Math.round((1 - mockProduct.discountPrice! / mockProduct.price) * 100);
+    expect(screen.getByText(`${discountPercentage}%`)).toBeInTheDocument();
+  });
+});
+```
+
+### tests/frontend/hooks/useAuth.test.tsx
+```typescript
+import { renderHook, act, waitFor } from '@testing-library/react';
+import { Provider } from 'react-redux';
+import { configureStore } from '@reduxjs/toolkit';
+import useAuth from '@/hooks/useAuth';
+import authSlice from '@/store/slices/authSlice';
+
+const mockStore = configureStore({
+  reducer: {
+    auth: authSlice,
+  },
+});
+
+const wrapper = ({ children }: { children: React.ReactNode }) => (
+  <Provider store={mockStore}>{children}</Provider>
+);
+
+describe('useAuth Hook', () => {
+  test('handles login correctly', async () => {
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    act(() => {
+      result.current.login('test@example.com', 'password123');
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.isAuthenticated).toBe(true);
+    });
+  });
+
+  test('handles logout correctly', async () => {
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    act(() => {
+      result.current.logout();
+    });
+
+    await waitFor(() => {
+      expect(result.current.isAuthenticated).toBe(false);
+      expect(result.current.user).toBeNull();
+    });
+  });
+
+  test('validates Persian phone numbers', () => {
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    const validPhone = '09123456789';
+    const invalidPhone = '123456789';
+
+    expect(result.current.validatePhone(validPhone)).toBe(true);
+    expect(result.current.validatePhone(invalidPhone)).toBe(false);
+  });
+});
+```
+
+### tests/frontend/utils/persian.test.ts
+```typescript
+import {
+  toPersianNumber,
+  toEnglishNumber,
+  formatPrice,
+  isValidNationalId,
+  formatPhoneNumber
+} from '@/utils/persian';
+
+describe('Persian Utilities', () => {
+  test('converts English numbers to Persian', () => {
+    expect(toPersianNumber('123456')).toBe('۱۲۳۴۵۶');
+    expect(toPersianNumber('0987654321')).toBe('۰۹۸۷۶۵۴۳۲۱');
+  });
+
+  test('converts Persian numbers to English', () => {
+    expect(toEnglishNumber('۱۲۳۴۵۶')).toBe('123456');
+    expect(toEnglishNumber('۰۹۸۷۶۵۴۳۲۱')).toBe('0987654321');
+  });
+
+  test('formats price correctly', () => {
+    expect(formatPrice(1000000)).toBe('۱,۰۰۰,۰۰۰ تومان');
+    expect(formatPrice(500000)).toBe('۵۰۰,۰۰۰ تومان');
+  });
+
+  test('validates Iranian national ID', () => {
+    expect(isValidNationalId('0123456789')).toBe(true);
+    expect(isValidNationalId('1234567890')).toBe(false);
+    expect(isValidNationalId('123')).toBe(false);
+  });
+
+  test('formats phone numbers correctly', () => {
+    expect(formatPhoneNumber('09123456789')).toBe('۰۹۱۲-۳۴۵-۶۷۸۹');
+    expect(formatPhoneNumber('02112345678')).toBe('۰۲۱-۱۲۳۴-۵۶۷۸');
+  });
+});
+```
+
+## 🔧 Backend Testing
+
+### tests/backend/controllers/product.test.ts
+```typescript
+import request from 'supertest';
+import app from '@/server';
+import { Product } from '@/models/Product';
+import { connectDB, closeDB } from '@/config/testDB';
+
+beforeAll(async () => {
+  await connectDB();
+});
+
+afterAll(async () => {
+  await closeDB();
+});
+
+beforeEach(async () => {
+  await Product.deleteMany({});
+});
+
+describe('Product Controller', () => {
+  test('GET /api/products returns products with Persian support', async () => {
+    const testProduct = new Product({
+      title: 'محصول تست',
+      description: 'توضیحات محصول تست',
+      price: 100000,
+      category: 'electronics',
+      brand: 'Samsung',
+      inStock: true,
+    });
+    await testProduct.save();
+
+    const response = await request(app)
+      .get('/api/products')
+      .expect(200);
+
+    expect(response.body.products).toHaveLength(1);
+    expect(response.body.products[0].title).toBe('محصول تست');
+    expect(response.body.products[0].description).toBe('توضیحات محصول تست');
+  });
+
+  test('POST /api/products creates product with Persian data', async () => {
+    const productData = {
+      title: 'گوشی هوشمند',
+      description: 'گوشی هوشمند با کیفیت بالا',
+      price: 5000000,
+      category: 'electronics',
+      brand: 'Apple',
+      specifications: {
+        'رنگ': 'آبی',
+        'حافظه': '۱۲۸ گیگابایت'
+      }
+    };
+
+    const response = await request(app)
+      .post('/api/products')
+      .send(productData)
+      .expect(201);
+
+    expect(response.body.product.title).toBe('گوشی هوشمند');
+    expect(response.body.product.specifications['رنگ']).toBe('آبی');
+  });
+
+  test('GET /api/products/search handles Persian search terms', async () => {
+    const products = [
+      new Product({
+        title: 'گوشی سامسونگ',
+        description: 'گوشی هوشمند سامسونگ',
+        price: 3000000,
+        category: 'electronics',
+        brand: 'Samsung',
+      }),
+      new Product({
+        title: 'لپ تاپ ایسوس',
+        description: 'لپ تاپ گیمینگ ایسوس',
+        price: 10000000,
+        category: 'computers',
+        brand: 'ASUS',
+      }),
+    ];
+    await Product.insertMany(products);
+
+    const response = await request(app)
+      .get('/api/products/search?q=گوشی')
+      .expect(200);
+
+    expect(response.body.products).toHaveLength(1);
+    expect(response.body.products[0].title).toBe('گوشی سامسونگ');
+  });
+});
+```
+
+### tests/backend/services/payment.test.ts
+```typescript
+import { PaymentService } from '@/services/PaymentService';
+import { ZarinPalService } from '@/services/ZarinPalService';
+import { MelliPayService } from '@/services/MelliPayService';
+
+jest.mock('@/services/ZarinPalService');
+jest.mock('@/services/MelliPayService');
+
+describe('PaymentService', () => {
+  let paymentService: PaymentService;
+
+  beforeEach(() => {
+    paymentService = new PaymentService();
+  });
+
+  test('processes ZarinPal payment correctly', async () => {
+    const mockZarinPal = new ZarinPalService() as jest.Mocked<ZarinPalService>;
+    mockZarinPal.createPayment.mockResolvedValue({
+      success: true,
+      paymentUrl: 'https://zarinpal.com/pg/StartPay/test',
+      authority: 'A00000000000000000000000000123456789',
+    });
+
+    const result = await paymentService.processPayment({
+      amount: 100000,
+      description: 'خرید محصول',
+      gateway: 'zarinpal',
+      callbackUrl: 'https://alphastore.ir/callback',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.paymentUrl).toContain('zarinpal.com');
+  });
+
+  test('handles payment verification', async () => {
+    const mockZarinPal = new ZarinPalService() as jest.Mocked<ZarinPalService>;
+    mockZarinPal.verifyPayment.mockResolvedValue({
+      success: true,
+      refId: '123456789',
+      cardPan: '123456******1234',
+    });
+
+    const result = await paymentService.verifyPayment({
+      authority: 'A00000000000000000000000000123456789',
+      status: 'OK',
+      amount: 100000,
+      gateway: 'zarinpal',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.refId).toBe('123456789');
+  });
+
+  test('converts amounts to Iranian Rial correctly', () => {
+    const tomanAmount = 100000;
+    const rialAmount = paymentService.tomanToRial(tomanAmount);
+    expect(rialAmount).toBe(1000000);
+  });
+});
+```
+
+## 🎭 End-to-End Testing
+
+### tests/e2e/user-flows/shopping-flow.cy.ts
+```typescript
+describe('Complete Shopping Flow', () => {
+  beforeEach(() => {
+    cy.visit('/');
+    cy.viewport(1280, 720);
+  });
+
+  it('completes full shopping journey in Persian', () => {
+    // Navigate to products
+    cy.get('[data-testid="products-link"]').click();
+    cy.url().should('include', '/products');
+
+    // Search for a product in Persian
+    cy.get('[data-testid="search-input"]').type('گوشی');
+    cy.get('[data-testid="search-button"]').click();
+
+    // Select a product
+    cy.get('[data-testid="product-card"]').first().click();
+    cy.url().should('include', '/products/');
+
+    // Add to cart
+    cy.get('[data-testid="add-to-cart"]').click();
+    cy.get('[data-testid="cart-notification"]').should('contain', 'محصول به سبد خرید اضافه شد');
+
+    // Go to cart
+    cy.get('[data-testid="cart-icon"]').click();
+    cy.url().should('include', '/cart');
+
+    // Proceed to checkout
+    cy.get('[data-testid="checkout-button"]').click();
+    cy.url().should('include', '/checkout');
+
+    // Fill shipping information
+    cy.get('[data-testid="name-input"]').type('علی احمدی');
+    cy.get('[data-testid="phone-input"]').type('09123456789');
+    cy.get('[data-testid="address-input"]').type('تهران، خیابان ولیعصر، پلاک ۱۲۳');
+    cy.get('[data-testid="postal-code-input"]').type('1234567890');
+
+    // Select payment method
+    cy.get('[data-testid="payment-zarinpal"]').click();
+
+    // Complete order
+    cy.get('[data-testid="place-order"]').click();
+    cy.url().should('include', '/payment');
+
+    // Verify Persian text rendering
+    cy.get('body').should('have.css', 'direction', 'rtl');
+    cy.get('[data-testid="amount"]').should('contain', 'تومان');
+  });
+
+  it('handles mobile shopping flow', () => {
+    cy.viewport('iphone-x');
+    
+    // Mobile navigation
+    cy.get('[data-testid="mobile-menu-toggle"]').click();
+    cy.get('[data-testid="mobile-menu"]').should('be.visible');
+    
+    // Mobile product browsing
+    cy.get('[data-testid="mobile-products-link"]').click();
+    cy.get('[data-testid="product-grid"]').should('be.visible');
+    
+    // Mobile cart interaction
+    cy.get('[data-testid="product-card"]').first().within(() => {
+      cy.get('[data-testid="quick-add"]').click();
+    });
+    
+    cy.get('[data-testid="mobile-cart-drawer"]').should('be.visible');
+  });
+
+  it('validates form inputs with Persian messages', () => {
+    cy.visit('/checkout');
+    
+    // Try to submit empty form
+    cy.get('[data-testid="place-order"]').click();
+    
+    // Check Persian validation messages
+    cy.get('[data-testid="name-error"]').should('contain', 'نام الزامی است');
+    cy.get('[data-testid="phone-error"]').should('contain', 'شماره تلفن معتبر وارد کنید');
+    cy.get('[data-testid="address-error"]').should('contain', 'آدرس الزامی است');
+    
+    // Test phone validation
+    cy.get('[data-testid="phone-input"]').type('123');
+    cy.get('[data-testid="phone-error"]').should('contain', 'شماره تلفن باید ۱۱ رقم باشد');
+    
+    // Test national ID validation
+    cy.get('[data-testid="national-id-input"]').type('123');
+    cy.get('[data-testid="national-id-error"]').should('contain', 'کد ملی معتبر نیست');
+  });
+});
+```
+
+### tests/e2e/admin-flows/product-management.cy.ts
+```typescript
+describe('Admin Product Management', () => {
+  beforeEach(() => {
+    cy.login('admin@alphastore.ir', 'adminpassword');
+    cy.visit('/admin');
+  });
+
+  it('creates product with Persian content', () => {
+    // Navigate to products section
+    cy.get('[data-testid="admin-products"]').click();
+    cy.get('[data-testid="add-product"]').click();
+
+    // Fill product form with Persian data
+    cy.get('[data-testid="product-title"]').type('لپ تاپ گیمینگ ASUS');
+    cy.get('[data-testid="product-description"]').type('لپ تاپ گیمینگ با کارت گرافیک قدرتمند');
+    cy.get('[data-testid="product-price"]').type('15000000');
+    
+    // Set category
+    cy.get('[data-testid="product-category"]').select('computers');
+    
+    // Add specifications
+    cy.get('[data-testid="add-spec"]').click();
+    cy.get('[data-testid="spec-key-0"]').type('پردازنده');
+    cy.get('[data-testid="spec-value-0"]').type('Intel Core i7');
+    
+    // Upload image
+    cy.get('[data-testid="product-image"]').selectFile('cypress/fixtures/product-image.jpg');
+    
+    // Save product
+    cy.get('[data-testid="save-product"]').click();
+    
+    // Verify success
+    cy.get('[data-testid="success-message"]').should('contain', 'محصول با موفقیت ایجاد شد');
+  });
+
+  it('manages product inventory', () => {
+    cy.get('[data-testid="admin-products"]').click();
+    
+    // Find product and edit
+    cy.get('[data-testid="product-row"]').first().within(() => {
+      cy.get('[data-testid="edit-product"]').click();
+    });
+    
+    // Update inventory
+    cy.get('[data-testid="stock-quantity"]').clear().type('50');
+    cy.get('[data-testid="low-stock-alert"]').type('5');
+    
+    // Save changes
+    cy.get('[data-testid="save-product"]').click();
+    
+    // Verify inventory update
+    cy.get('[data-testid="success-message"]').should('be.visible');
+  });
+
+  it('processes orders in Persian interface', () => {
+    cy.get('[data-testid="admin-orders"]').click();
+    
+    // Check order list with Persian content
+    cy.get('[data-testid="order-table"]').should('be.visible');
+    cy.get('[data-testid="order-row"]').first().should('contain', 'سفارش');
+    
+    // Update order status
+    cy.get('[data-testid="order-row"]').first().within(() => {
+      cy.get('[data-testid="status-select"]').select('processing');
+      cy.get('[data-testid="update-status"]').click();
+    });
+    
+    // Add tracking number
+    cy.get('[data-testid="tracking-input"]').type('123456789');
+    cy.get('[data-testid="save-tracking"]').click();
+    
+    // Verify update
+    cy.get('[data-testid="success-message"]').should('contain', 'وضعیت سفارش بروزرسانی شد');
+  });
+});
+```
+
+## 🏛️ Legal Compliance Components
+
+### src/components/legal/EnamadBadge.tsx
+```typescript
+import React from 'react';
+import { motion } from 'framer-motion';
+
+interface EnamadBadgeProps {
+  size?: 'small' | 'medium' | 'large';
+  certificateId: string;
+}
+
+const EnamadBadge: React.FC<EnamadBadgeProps> = ({ 
+  size = 'medium',
+  certificateId 
+}) => {
+  const sizes = {
+    small: { width: 60, height: 80 },
+    medium: { width: 80, height: 100 },
+    large: { width: 100, height: 125 }
+  };
+
+  const badgeSize = sizes[size];
+
+  return (
+    <motion.div
+      className="enamad-badge"
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.95 }}
+    >
+      <a
+        href={`https://logo.samandehi.ir/Verify.aspx?id=${certificateId}&p=rfthuhynobpduiwkluhv`}
+        target="_blank"
+        rel="nofollow noopener noreferrer"
+        title="اعتماد الکترونیکی"
+      >
+        <img
+          src={`https://logo.samandehi.ir/logo.aspx?id=${certificateId}&p=rfthuhynobpduiwkluhv`}
+          alt="اعتماد الکترونیکی"
+          style={{
+            width: badgeSize.width,
+            height: badgeSize.height,
+            border: 'none'
+          }}
+          loading="lazy"
+        />
+      </a>
+    </motion.div>
+  );
+};
+
+export default EnamadBadge;
+```
+
+### src/components/legal/TrustBadges.tsx
+```typescript
+import React from 'react';
+import EnamadBadge from './EnamadBadge';
+import { Shield, Award, Truck, CreditCard } from 'lucide-react';
+
+const TrustBadges: React.FC = () => {
+  return (
+    <div className="trust-badges bg-gray-50 py-8 mt-12">
+      <div className="container mx-auto px-4">
+        <h3 className="text-2xl font-bold text-center mb-6 text-gray-800">
+          اعتماد و امنیت خرید
+        </h3>
+        
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 items-center justify-items-center">
+          {/* E-Namad Badge */}
+          <div className="text-center">
+            <EnamadBadge certificateId="YOUR_CERTIFICATE_ID" />
+            <p className="text-sm text-gray-600 mt-2">نماد اعتماد الکترونیکی</p>
+          </div>
+
+          {/* Security Badge */}
+          <div className="text-center">
+            <div className="bg-green-100 p-4 rounded-lg mb-2">
+              <Shield className="w-12 h-12 text-green-600 mx-auto" />
+            </div>
+            <p className="text-sm text-gray-600">پرداخت امن</p>
+          </div>
+
+          {/* Quality Badge */}
+          <div className="text-center">
+            <div className="bg-blue-100 p-4 rounded-lg mb-2">
+              <Award className="w-12 h-12 text-blue-600 mx-auto" />
+            </div>
+            <p className="text-sm text-gray-600">ضمانت کیفیت</p>
+          </div>
+
+          {/* Delivery Badge */}
+          <div className="text-center">
+            <div className="bg-orange-100 p-4 rounded-lg mb-2">
+              <Truck className="w-12 h-12 text-orange-600 mx-auto" />
+            </div>
+            <p className="text-sm text-gray-600">ارسال سریع</p>
+          </div>
+        </div>
+
+        {/* Payment Methods */}
+        <div className="mt-8 text-center">
+          <h4 className="text-lg font-semibold mb-4">روش‌های پرداخت</h4>
+          <div className="flex justify-center items-center space-x-4 space-x-reverse">
+            <img src="/images/zarinpal-logo.png" alt="زرین پال" className="h-8" />
+            <img src="/images/mellipayamak-logo.png" alt="ملی پیامک" className="h-8" />
+            <img src="/images/saman-bank-logo.png" alt="بانک سامان" className="h-8" />
+            <img src="/images/parsian-bank-logo.png" alt="بانک پارسیان" className="h-8" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default TrustBadges;
+```
+
+### src/components/legal/CookieConsent.tsx
+```typescript
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { X, Cookie, Settings } from 'lucide-react';
+
+const CookieConsent: React.FC = () => {
+  const [isVisible, setIsVisible] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+
+  useEffect(() => {
+    const consent = localStorage.getItem('cookie-consent');
+    if (!consent) {
+      setIsVisible(true);
+    }
+  }, []);
+
+  const acceptAll = () => {
+    localStorage.setItem('cookie-consent', 'all');
+    setIsVisible(false);
+  };
+
+  const acceptNecessary = () => {
+    localStorage.setItem('cookie-consent', 'necessary');
+    setIsVisible(false);
+  };
+
+  const rejectAll = () => {
+    localStorage.setItem('cookie-consent', 'rejected');
+    setIsVisible(false);
+  };
+
+  return (
+    <AnimatePresence>
+      {isVisible && (
+        <motion.div
+          initial={{ y: 100, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 100, opacity: 0 }}
+          className="fixed bottom-0 left-0 right-0 z-50 bg-white shadow-lg border-t border-gray-200"
+        >
+          <div className="container mx-auto px-4 py-4">
+            <div className="flex items-start justify-between">
+              <div className="flex items-start space-x-3 space-x-reverse">
+                <Cookie className="w-6 h-6 text-blue-600 mt-1 flex-shrink-0" />
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                    استفاده از کوکی‌ها
+                  </h3>
+                  <p className="text-sm text-gray-600 mb-3">
+                    ما از کوکی‌ها برای بهبود تجربه کاربری، تجزیه و تحلیل ترافیک و ارائه محتوای شخصی‌سازی شده استفاده می‌کنیم.
+                  </p>
+                  
+                  {!showDetails ? (
+                    <button
+                      onClick={() => setShowDetails(true)}
+                      className="text-blue-600 text-sm hover:underline mb-3 flex items-center"
+                    >
+                      <Settings className="w-4 h-4 ml-1" />
+                      تنظیمات کوکی
+                    </button>
+                  ) : (
+                    <div className="mb-3">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                        <label className="flex items-center">
+                          <input type="checkbox" checked disabled className="ml-2" />
+                          کوکی‌های ضروری
+                        </label>
+                        <label className="flex items-center">
+                          <input type="checkbox" className="ml-2" />
+                          کوکی‌های عملکردی
+                        </label>
+                        <label className="flex items-center">
+                          <input type="checkbox" className="ml-2" />
+                          کوکی‌های تبلیغاتی
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={acceptAll}
+                      className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition-colors"
+                    >
+                      پذیرش همه
+                    </button>
+                    <button
+                      onClick={acceptNecessary}
+                      className="bg-gray-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-gray-700 transition-colors"
+                    >
+                      فقط ضروری
+                    </button>
+                    <button
+                      onClick={rejectAll}
+                      className="text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-100 transition-colors"
+                    >
+                      رد همه
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <button
+                onClick={() => setIsVisible(false)}
+                className="text-gray-400 hover:text-gray-600 p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+};
+
+export default CookieConsent;
+```
+
+## 🔍 SEO Components
+
+### src/components/seo/MetaTags.tsx
+```typescript
+import React from 'react';
+import { Helmet } from 'react-helmet';
+
+interface MetaTagsProps {
+  title: string;
+  description: string;
+  keywords?: string[];
+  image?: string;
+  url?: string;
+  type?: 'website' | 'article' | 'product';
+  price?: number;
+  currency?: string;
+  availability?: 'in_stock' | 'out_of_stock';
+}
+
+const MetaTags: React.FC<MetaTagsProps> = ({
+  title,
+  description,
+  keywords = [],
+  image = '/images/alpha-store-logo.png',
+  url = 'https://alphastore.ir',
+  type = 'website',
+  price,
+  currency = 'IRR',
+  availability
+}) => {
+  const siteName = 'Î± Store - فروشگاه آلفا';
+  const fullTitle = title.includes(siteName) ? title : `${title} | ${siteName}`;
+
+  return (
+    <Helmet>
+      {/* Basic Meta Tags */}
+      <title>{fullTitle}</title>
+      <meta name="description" content={description} />
+      {keywords.length > 0 && (
+        <meta name="keywords" content={keywords.join(', ')} />
+      )}
+      
+      {/* Persian Language */}
+      <html lang="fa" dir="rtl" />
+      <meta name="language" content="Persian" />
+      
+      {/* Open Graph */}
+      <meta property="og:title" content={fullTitle} />
+      <meta property="og:description" content={description} />
+      <meta property="og:image" content={image} />
+      <meta property="og:url" content={url} />
+      <meta property="og:type" content={type} />
+      <meta property="og:site_name" content={siteName} />
+      <meta property="og:locale" content="fa_IR" />
+      
+      {/* Twitter Card */}
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:title" content={fullTitle} />
+      <meta name="twitter:description" content={description} />
+      <meta name="twitter:image" content={image} />
+      
+      {/* Product Specific */}
+      {type === 'product' && price && (
+        <>
+          <meta property="product:price:amount" content={price.toString()} />
+          <meta property="product:price:currency" content={currency} />
+          {availability && (
+            <meta property="product:availability" content={availability} />
+          )}
+        </>
+      )}
+      
+      {/* Additional SEO */}
+      <meta name="robots" content="index, follow" />
+      <meta name="author" content="Î± Store" />
+      <link rel="canonical" href={url} />
+      
+      {/* Persian Fonts Preload */}
+      <link
+        rel="preload"
+        href="/fonts/IRANSans.woff2"
+        as="font"
+        type="font/woff2"
+        crossOrigin="anonymous"
+      />
+    </Helmet>
+  );
+};
+
+export default MetaTags;
+```
+
+### src/components/seo/StructuredData.tsx
+```typescript
+import React from 'react';
+import { Helmet } from 'react-helmet';
+
+interface Product {
+  name: string;
+  description: string;
+  price: number;
+  image: string;
+  brand: string;
+  category: string;
+  sku: string;
+  availability: 'InStock' | 'OutOfStock';
+  rating?: {
+    value: number;
+    count: number;
+  };
+}
+
+interface StructuredDataProps {
+  type: 'organization' | 'product' | 'breadcrumb' | 'website';
+  data?: any;
+  product?: Product;
+}
+
+const StructuredData: React.FC<StructuredDataProps> = ({ type, data, product }) => {
+  const getStructuredData = () => {
+    switch (type) {
+      case 'organization':
+        return {
+          "@context": "https://schema.org",
+          "@type": "Organization",
+          "name": "Î± Store",
+          "alternateName": "فروشگاه آلفا",
+          "url": "https://alphastore.ir",
+          "logo": "https://alphastore.ir/images/logo.png",
+          "contactPoint": {
+            "@type": "ContactPoint",
+            "telephone": "+98-21-12345678",
+            "contactType": "customer service",
+            "availableLanguage": ["Persian", "English"]
+          },
+          "address": {
+            "@type": "PostalAddress",
+            "streetAddress": "خیابان ولیعصر، پلاک ۱۲۳",
+            "addressLocality": "تهران",
+            "addressCountry": "IR"
+          },
+          "sameAs": [
+            "https://instagram.com/alphastore.ir",
+            "https://t.me/alphastore_ir"
+          ]
+        };
+
+      case 'product':
+        if (!product) return null;
+        return {
+          "@context": "https://schema.org",
+          "@type": "Product",
+          "name": product.name,
+          "description": product.description,
+          "image": product.image,
+          "brand": {
+            "@type": "Brand",
+            "name": product.brand
+          },
+          "category": product.category,
+          "sku": product.sku,
+          "offers": {
+            "@type": "Offer",
+            "price": product.price,
+            "priceCurrency": "IRR",
+            "availability": `https://schema.org/${product.availability}`,
+            "seller": {
+              "@type": "Organization",
+              "name": "Î± Store"
+            }
+          },
+          ...(product.rating && {
+            "aggregateRating": {
+              "@type": "AggregateRating",
+              "ratingValue": product.rating.value,
+              "reviewCount": product.rating.count
+            }
+          })
+        };
+
+      case 'website':
+        return {
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          "name": "Î± Store",
+          "alternateName": "فروشگاه آلفا",
+          "url": "https://alphastore.ir",
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": "https://alphastore.ir/search?q={search_term_string}",
+            "query-input": "required name=search_term_string"
+          }
+        };
+
+      case 'breadcrumb':
+        return data;
+
+      default:
+        return null;
+    }
+  };
+
+  const structuredData = getStructuredData();
+
+  if (!structuredData) return null;
+
+  return (
+    <Helmet>
+      <script type="application/ld+json">
+        {JSON.stringify(structuredData)}
+      </script>
+    </Helmet>
+  );
+};
+
+export default StructuredData;
+```
+
+### src/utils/seo.ts
+```typescript
+export interface SEOConfig {
+  title: string;
+  description: string;
+  keywords: string[];
+  image?: string;
+  url?: string;
+}
+
+export const generateSEOConfig = (
+  type: 'home' | 'product' | 'category' | 'search',
+  data?: any
+): SEOConfig => {
+  const baseConfig = {
+    keywords: [
+      'فروشگاه آنلاین',
+      'خرید اینترنتی',
+      'الکترونیک',
+      'موبایل',
+      'لپ تاپ',
+      'کامپیوتر',
+      'لوازم خانگی'
+    ]
+  };
+
+  switch (type) {
+    case 'home':
+      return {
+        title: 'Î± Store - فروشگاه آنلاین آلفا | خرید امن و آسان',
+        description: 'فروشگاه آنلاین آلفا ارائه‌دهنده انواع محصولات الکترونیک، موبایل، لپ تاپ و لوازم خانگی با بهترین قیمت و کیفیت. خرید آنلاین آسان و ارسال سریع در سراسر ایران.',
+        ...baseConfig
+      };
+
+    case 'product':
+      return {
+        title: `${data.title} - خرید آنلاین در Î± Store`,
+        description: `خرید ${data.title} با بهترین قیمت و کیفیت در فروشگاه آنلاین آلفا. ${data.description}`,
+        keywords: [
+          ...baseConfig.keywords,
+          data.title,
+          data.brand,
+          data.category,
+          ...data.tags || []
+        ],
+        image: data.image,
+        url: `https://alphastore.ir/products/${data.slug}`
+      };
+
+    case 'category':
+      return {
+        title: `خرید ${data.name} - فروشگاه آنلاین Î± Store`,
+        description: `انواع ${data.name} با بهترین قیمت و کیفیت در فروشگاه آنلاین آلفا. مشاهده و خرید آنلاین محصولات ${data.name}`,
+        keywords: [
+          ...baseConfig.keywords,
+          data.name,
+          `خرید ${data.name}`,
+          `قیمت ${data.name}`
+        ],
+        url: `https://alphastore.ir/categories/${data.slug}`
+      };
+
+    case 'search':
+      return {
+        title: `نتایج جستجو برای "${data.query}" - Î± Store`,
+        description: `نتایج جستجوی "${data.query}" در فروشگاه آنلاین آلفا. مشاهده محصولات مرتبط و خرید آنلاین`,
+        keywords: [
+          ...baseConfig.keywords,
+          data.query,
+          `جستجوی ${data.query}`
+        ],
+        url: `https://alphastore.ir/search?q=${encodeURIComponent(data.query)}`
+      };
+
+    default:
+      return {
+        title: 'Î± Store - فروشگاه آنلاین آلفا',
+        description: 'فروشگاه آنلاین آلفا',
+        ...baseConfig
+      };
+  }
+};
+
+export const generateBreadcrumbSchema = (breadcrumbs: Array<{ name: string; url: string }>) => {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": breadcrumbs.map((item, index) => ({
+      "@type": "ListItem",
+      "position": index + 1,
+      "name": item.name,
+      "item": item.url
+    }))
+  };
+};
+
+export const generateProductSchema = (product: any) => {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": product.title,
+    "description": product.description,
+    "image": product.images,
+    "brand": {
+      "@type": "Brand",
+      "name": product.brand
+    },
+    "category": product.category,
+    "sku": product.sku,
+    "gtin": product.barcode,
+    "offers": {
+      "@type": "Offer",
+      "price": product.discountPrice || product.price,
+      "priceCurrency": "IRR",
+      "availability": product.inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+      "priceValidUntil": new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      "seller": {
+        "@type": "Organization",
+        "name": "Î± Store"
+      }
+    },
+    "aggregateRating": product.rating && {
+      "@type": "AggregateRating",
+      "ratingValue": product.rating.average,
+      "reviewCount": product.rating.count,
+      "bestRating": 5,
+      "worstRating": 1
+    }
+  };
+};
+```
+
+## 📋 Legal Pages
+
+### pages/legal/privacy-policy.tsx
+```typescript
+import React from 'react';
+import Layout from '@/components/Layout';
+import MetaTags from '@/components/seo/MetaTags';
+
+const PrivacyPolicy: React.FC = () => {
+  return (
+    <Layout>
+      <MetaTags
+        title="حریم خصوصی"
+        description="سیاست حریم خصوصی فروشگاه آنلاین آلفا استور"
+        keywords={['حریم خصوصی', 'سیاست', 'امنیت اطلاعات']}
+      />
+      
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-4xl mx-auto">
+          <h1 className="text-3xl font-bold text-gray-800 mb-8">
+            سیاست حریم خصوصی
+          </h1>
+          
+          <div className="prose prose-lg max-w-none text-gray-700">
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4">مقدمه</h2>
+              <p>
+                فروشگاه آنلاین آلفا استور (Î± Store) متعهد به حفاظت از حریم خصوصی کاربران خود می‌باشد.
+                این سیاست توضیح می‌دهد که چگونه اطلاعات شخصی شما را جمع‌آوری، استفاده و محافظت می‌کنیم.
+              </p>
+            </section>
+
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4">اطلاعات جمع‌آوری شده</h2>
+              <h3 className="text-xl font-medium mb-3">اطلاعات شخصی</h3>
+              <ul className="list-disc pr-6 mb-4">
+                <li>نام و نام خانوادگی</li>
+                <li>آدرس ایمیل</li>
+                <li>شماره تلفن همراه</li>
+                <li>آدرس پستی</li>
+                <li>کد ملی (برای صدور فاکتور)</li>
+              </ul>
+              
+              <h3 className="text-xl font-medium mb-3">اطلاعات فنی</h3>
+              <ul className="list-disc pr-6 mb-4">
+                <li>آدرس IP</li>
+                <li>نوع مرورگر و سیستم عامل</li>
+                <li>کوکی‌ها و فناوری‌های ردیابی</li>
+                <li>الگوی استفاده از وب‌سایت</li>
+              </ul>
+            </section>
+
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4">نحوه استفاده از اطلاعات</h2>
+              <ul className="list-disc pr-6">
+                <li>پردازش و ارسال سفارشات</li>
+                <li>ارتباط با مشتریان</li>
+                <li>بهبود خدمات و تجربه کاربری</li>
+                <li>ارسال اطلاعیه‌های مهم</li>
+                <li>تحلیل آماری و بهینه‌سازی</li>
+                <li>پیشگیری از تقلب و سوءاستفاده</li>
+              </ul>
+            </section>
+
+            <section className="mb-8">
+              <h2 className="text-2xl font-semiband mb-4">اشتراک‌گذاری اطلاعات</h2>
+              <p className="mb-4">
+                ما اطلاعات شخصی شما را با اشخاص ثالث به اشتراک نمی‌گذاریم مگر در موارد زیر:
+              </p>
+              <ul className="list-disc pr-6">
+                <li>ارائه‌دهندگان خدمات پست و حمل‌ونقل</li>
+                <li>درگاه‌های پرداخت الکترونیکی</li>
+                <li>الزامات قانونی و درخواست مقامات قضایی</li>
+                <li>حفاظت از حقوق و امنیت فروشگاه</li>
+              </ul>
+            </section>
+
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4">امنیت اطلاعات</h2>
+              <p>
+                ما از روش‌های امنیتی پیشرفته برای محافظت از اطلاعات شما استفاده می‌کنیم که شامل
+                رمزگذاری SSL، فایروال‌های امنیتی، و کنترل دسترسی محدود می‌باشد.
+              </p>
+            </section>
+
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4">حقوق کاربران</h2>
+              <ul className="list-disc pr-6">
+                <li>دسترسی به اطلاعات شخصی خود</li>
+                <li>درخواست اصلاح اطلاعات نادرست</li>
+                <li>حذف اطلاعات (در صورت امکان)</li>
+                <li>محدود کردن پردازش اطلاعات</li>
+                <li>انتقال اطلاعات به ارائه‌دهنده دیگر</li>
+              </ul>
+            </section>
+
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4">تماس با ما</h2>
+              <p>
+                برای سوالات مربوط به حریم خصوصی می‌توانید از طریق ایمیل privacy@alphastore.ir
+                یا شماره تلفن ۰۲۱-۱۲۳۴۵۶۷۸ با ما تماس بگیرید.
+              </p>
+            </section>
+
+            <section>
+              <p className="text-sm text-gray-500">
+                آخرین بروزرسانی: ۱۴۰۳/۰۶/۱۵
+              </p>
+            </section>
+          </div>
+        </div>
+      </div>
+    </Layout>
+  );
+};
+
+export default PrivacyPolicy;
+```
+
+## 📖 Integration Guide
+
+### docs/INTEGRATION_GUIDE.md
+```markdown
+# Î± Store - Complete Integration Guide
+
+## Overview
+This guide walks you through integrating all 16 parts of the Î± Store project into a complete, production-ready e-commerce platform.
+
+## Prerequisites
+
+### System Requirements
+- Node.js 18+ and npm/yarn
+- MongoDB 5.0+
+- Redis 6.0+
+- SSL Certificate
+- Domain name
+
+### Development Tools
+- Git
+- VS Code (recommended)
+- MongoDB Compass
+- Postman or Insomnia
+
+## Step-by-Step Integration
+
+### 1. Project Structure Setup
+
+```bash
+# Create main project directory
+mkdir alpha-store-complete
+cd alpha-store-complete
+
+# Initialize git repository
+git init
+```
+
+### 2. Frontend Integration
+
+```bash
+# Create frontend directory
+mkdir frontend
+cd frontend
+
+# Copy all frontend parts (1A-1C, 2A-2C, 3A, 4A, 5A, 7B)
+# Merge package.json dependencies
+# Combine all components and pages
+```
+
+#### Frontend Dependencies Merge
+```json
+{
+  "dependencies": {
+    "@reduxjs/toolkit": "^1.9.5",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.14.0",
+    "react-redux": "^8.1.0",
+    "framer-motion": "^10.12.0",
+    "lucide-react": "^0.263.0",
+    "react-hook-form": "^7.45.0",
+    "react-hot-toast": "^2.4.1",
+    "tailwindcss": "^3.3.0",
+    "axios": "^1.4.0"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^13.4.0",
+    "@testing-library/jest-dom": "^6.1.0",
+    "@types/react": "^18.2.0",
+    "cypress": "^12.17.0",
+    "jest": "^29.6.0"
+  }
+}
+```
+
+### 3. Backend Integration
+
+```bash
+# Create backend directory
+cd ../backend
+
+# Copy all backend parts (3B, 4B, 5B-5C, 6A-6C, 7A)
+# Merge dependencies and configurations
+```
+
+#### Backend Dependencies
+```json
+{
+  "dependencies": {
+    "express": "^4.18.2",
+    "mongoose": "^7.4.0",
+    "jsonwebtoken": "^9.0.1",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "helmet": "^7.0.0",
+    "express-rate-limit": "^6.8.0",
+    "multer": "^1.4.5-lts.1",
+    "nodemailer": "^6.9.4",
+    "redis": "^4.6.7",
+    "zarinpal-checkout": "^1.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.4.0",
+    "nodemon": "^3.0.1",
+    "supertest": "^6.3.3",
+    "jest": "^29.6.0"
+  }
+}
+```
+
+### 4. Environment Configuration
+
+#### Frontend (.env)
+```env
+REACT_APP_API_URL=https://api.alphastore.ir
+REACT_APP_SITE_URL=https://alphastore.ir
+REACT_APP_ZARINPAL_MERCHANT_ID=your_zarinpal_merchant_id
+REACT_APP_GOOGLE_ANALYTICS_ID=your_ga_id
+REACT_APP_ENAMAD_ID=your_enamad_certificate_id
+```
+
+#### Backend (.env)
+```env
+# Database
+MONGODB_URI=mongodb://localhost:27017/alphastore
+REDIS_URL=redis://localhost:6379
+
+# JWT
+JWT_SECRET=your_super_secret_jwt_key
+JWT_EXPIRE=30d
+
+# Email
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your_email@gmail.com
+SMTP_PASS=your_email_password
+
+# SMS
+SMS_API_KEY=your_sms_api_key
+SMS_SENDER=your_sms_sender_number
+
+# Payment
+ZARINPAL_MERCHANT_ID=your_zarinpal_merchant_id
+MELLIPAYAMAK_USERNAME=your_mellipayamak_username
+MELLIPAYAMAK_PASSWORD=your_mellipayamak_password
+
+# File Upload
+UPLOAD_PATH=./uploads
+MAX_FILE_SIZE=5242880
+
+# Security
+RATE_LIMIT_WINDOW=15
+RATE_LIMIT_MAX=100
+```
+
+### 5. Database Setup
+
+```bash
+# Start MongoDB
+sudo systemctl start mongod
+
+# Run database seeding
+node scripts/seed.js
+```
+
+#### Database Seed Script
+```javascript
+// scripts/seed.js
+const mongoose = require('mongoose');
+const Category = require('../models/Category');
+const Product = require('../models/Product');
+const User = require('../models/User');
+
+const categories = [
+  { name: 'الکترونیک', slug: 'electronics', icon: 'smartphone' },
+  { name: 'کامپیوتر', slug: 'computers', icon: 'laptop' },
+  { name: 'لوازم خانگی', slug: 'home-appliances', icon: 'home' }
+];
+
+const seedDatabase = async () => {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI);
+    
+    // Clear existing data
+    await Category.deleteMany({});
+    await Product.deleteMany({});
+    
+    // Seed categories
+    await Category.insertMany(categories);
+    
+    console.log('Database seeded successfully!');
+    process.exit(0);
+  } catch (error) {
+    console.error('Seeding failed:', error);
+    process.exit(1);
+  }
+};
+
+seedDatabase();
+```
+
+### 6. SSL and Domain Setup
+
+#### Nginx Configuration
+```nginx
+server {
+    listen 80;
+    server_name alphastore.ir www.alphastore.ir;
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name alphastore.ir www.alphastore.ir;
+    
+    ssl_certificate /path/to/certificate.crt;
+    ssl_certificate_key /path/to/private.key;
+    
+    # Frontend
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+    
+    # Backend API
+    location /api {
+        proxy_pass http://localhost:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+### 7. Production Deployment
+
+#### Frontend Build
+```bash
+cd frontend
+npm run build
+```
+
+#### PM2 Configuration
+```javascript
+// ecosystem.config.js
+module.exports = {
+  apps: [
+    {
+      name: 'alpha-store-backend',
+      script: 'server.js',
+      cwd: './backend',
+      instances: 'max',
+      exec_mode: 'cluster',
+      env: {
+        NODE_ENV: 'production',
+        PORT: 5000
+      }
+    },
+    {
+      name: 'alpha-store-frontend',
+      script: 'serve',
+      args: '-s build -l 3000',
+      cwd: './frontend',
+      env: {
+        NODE_ENV: 'production'
+      }
+    }
+  ]
+};
+```
+
+### 8. Testing Suite Setup
+
+```bash
+# Frontend tests
+cd frontend
+npm test
+
+# Backend tests
+cd ../backend
+npm test
+
+# E2E tests
+npx cypress run
+```
+
+### 9. Monitoring Setup
+
+#### Health Check Endpoint
+```javascript
+// backend/routes/health.js
+const express = require('express');
+const router = express.Router();
+
+router.get('/health', async (req, res) => {
+  try {
+    // Check database connection
+    const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+    
+    // Check Redis connection
+    const redisStatus = await redisClient.ping() === 'PONG' ? 'connected' : 'disconnected';
+    
+    res.json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      database: dbStatus,
+      redis: redisStatus,
+      uptime: process.uptime()
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'unhealthy',
+      error: error.message
+    });
+  }
+});
+```
+
+### 10. Performance Optimization
+
+#### Frontend Optimizations
+```javascript
+// webpack.config.js optimizations
+const path = require('path');
+
+module.exports = {
+  optimization: {
+    splitChunks: {
+      chunks: 'all',
+      cacheGroups: {
+        vendor: {
+          test: /[\\/]node_modules[\\/]/,
+          name: 'vendors',
+          chunks: 'all',
+        },
+      },
+    },
+  },
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, 'src'),
+    },
+  },
+};
+```
+
+#### Backend Optimizations
+```javascript
+// Performance middleware
+const compression = require('compression');
+const morgan = require('morgan');
+
+app.use(compression());
+app.use(morgan('combined'));
+
+// Database indexing
+// In models/Product.js
+productSchema.index({ title: 'text', description: 'text' });
+productSchema.index({ category: 1, price: 1 });
+productSchema.index({ createdAt: -1 });
+```
+
+## Testing Checklist
+
+### ✅ Frontend Testing
+- [ ] All components render correctly
+- [ ] Persian text displays properly (RTL)
+- [ ] Responsive design works on all devices
+- [ ] Shopping cart functionality
+- [ ] User authentication flows
+- [ ] Payment gateway integration
+- [ ] Admin panel operations
+
+### ✅ Backend Testing
+- [ ] API endpoints respond correctly
+- [ ] Database operations work
+- [ ] Authentication middleware
+- [ ] Payment processing
+- [ ] File upload functionality
+- [ ] Email/SMS notifications
+- [ ] Security measures active
+
+### ✅ E2E Testing
+- [ ] Complete user journey
+- [ ] Admin workflows
+- [ ] Mobile functionality
+- [ ] Cross-browser compatibility
+- [ ] Performance benchmarks
+
+## Deployment Verification
+
+### Production Checklist
+- [ ] SSL certificates installed
+- [ ] Domain DNS configured
+- [ ] Environment variables set
+- [ ] Database migrated and seeded
+- [ ] Payment gateways configured
+- [ ] Email/SMS services active
+- [ ] Monitoring tools deployed
+- [ ] Backup systems operational
+- [ ] CDN configured (if applicable)
+- [ ] SEO optimizations applied
+
+### Security Checklist
+- [ ] HTTPS enforced
+- [ ] Security headers configured
+- [ ] Rate limiting active
+- [ ] Input validation implemented
+- [ ] SQL injection protection
+- [ ] XSS protection enabled
+- [ ] CSRF protection active
+- [ ] File upload security
+- [ ] API authentication working
+- [ ] Error handling secure
+
+## Troubleshooting Common Issues
+
+### Database Connection Issues
+```bash
+# Check MongoDB status
+sudo systemctl status mongod
+
+# Check connection string
+echo $MONGODB_URI
+
+# Test connection
+mongo $MONGODB_URI
+```
+
+### Frontend Build Issues
+```bash
+# Clear node modules and reinstall
+rm -rf node_modules package-lock.json
+npm install
+
+# Clear build cache
+rm -rf build/.cache
+```
+
+### Backend API Issues
+```bash
+# Check logs
+pm2 logs alpha-store-backend
+
+# Restart application
+pm2 restart alpha-store-backend
+
+# Check environment variables
+pm2 env alpha-store-backend
+```
+
+### SSL/Domain Issues
+```bash
+# Test SSL certificate
+openssl s_client -connect alphastore.ir:443
+
+# Check DNS propagation
+nslookup alphastore.ir
+
+# Verify nginx configuration
+nginx -t
+```
+
+## Performance Monitoring
+
+### Metrics to Monitor
+- Response time
+- Error rate
+- Database query performance
+- Memory usage
+- CPU utilization
+- Disk space
+- Network traffic
+
+### Monitoring Tools Setup
+```javascript
+// Performance monitoring with New Relic
+const newrelic = require('newrelic');
+
+// Custom metrics
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    newrelic.recordMetric('Custom/ResponseTime', duration);
+  });
+  next();
+});
+```
+
+## Maintenance Guide
+
+### Regular Tasks
+- [ ] Database backup (daily)
+- [ ] Log rotation (weekly)
+- [ ] Security updates (monthly)
+- [ ] Performance optimization (monthly)
+- [ ] SSL certificate renewal (annually)
+
+### Update Procedures
+1. Test updates in staging environment
+2. Create database backup
+3. Deploy during low-traffic hours
+4. Monitor application health
+5. Rollback if issues occur
+
+## Support and Documentation
+
+### Internal Documentation
+- API documentation with Swagger
+- Component library with Storybook
+- Database schema documentation
+- Deployment procedures
+- Troubleshooting guides
+
+### External Resources
+- React documentation
+- Express.js guides
+- MongoDB tutorials
+- Payment gateway docs
+- SSL certificate guides
+
+---
+
+## Final Integration Script
+
+Create this script to automate the integration process:
+
+```bash
+#!/bin/bash
+# scripts/integrate.sh
+
+echo "🚀 Starting Î± Store Integration..."
+
+# 1. Setup directories
+echo "📁 Setting up project structure..."
+mkdir -p alpha-store-complete/{frontend,backend,docs,scripts}
+
+# 2. Copy frontend parts
+echo "⚛️ Integrating frontend components..."
+cp -r ../alpha-store-1a/src/* alpha-store-complete/frontend/src/
+cp -r ../alpha-store-1b/src/* alpha-store-complete/frontend/src/
+cp -r ../alpha-store-1c/src/* alpha-store-complete/frontend/src/
+# Continue for all parts...
+
+# 3. Copy backend parts
+echo "🔧 Integrating backend services..."
+cp -r ../alpha-store-3b/src/* alpha-store-complete/backend/src/
+cp -r ../alpha-store-4b/src/* alpha-store-complete/backend/src/
+# Continue for all parts...
+
+# 4. Install dependencies
+echo "📦 Installing dependencies..."
+cd alpha-store-complete/frontend && npm install
+cd ../backend && npm install
+
+# 5. Setup environment files
+echo "⚙️ Configuring environment..."
+cp .env.example .env
+echo "Please update .env files with your configuration"
+
+# 6. Setup database
+echo "🗄️ Setting up database..."
+node scripts/seed.js
+
+# 7. Run tests
+echo "🧪 Running tests..."
+cd frontend && npm test
+cd ../backend && npm test
+
+# 8. Build for production
+echo "🏗️ Building for production..."
+cd frontend && npm run build
+
+echo "✅ Integration complete! Your Î± Store is ready for deployment."
+```
+
+## Performance Benchmarks
+
+### Expected Performance Metrics
+- **Page Load Time**: < 3 seconds
+- **API Response Time**: < 500ms
+- **Database Query Time**: < 100ms
+- **Time to Interactive**: < 5 seconds
+- **Lighthouse Score**: > 90
+
+### Optimization Techniques Applied
+- Code splitting and lazy loading
+- Image optimization and WebP format
+- Gzip compression
+- Browser caching
+- CDN integration
+- Database query optimization
+- Redis caching layer
+
+## Security Implementation
+
+### Security Measures Implemented
+- **Authentication**: JWT with refresh tokens
+- **Authorization**: Role-based access control
+- **Encryption**: bcrypt for passwords, SSL for transmission
+- **Validation**: Input sanitization and validation
+- **Rate Limiting**: API request limiting
+- **Security Headers**: Helmet.js implementation
+- **CORS**: Configured for specific origins
+- **File Upload**: Type and size validation
+
+### Compliance
+- **GDPR**: Cookie consent and data protection
+- **E-Namad**: Iranian e-commerce certification
+- **PCI DSS**: Secure payment processing
+- **Iranian Laws**: Privacy and consumer protection
+
+This comprehensive integration guide ensures that all 16 parts of the Î± Store project are properly merged into a production-ready e-commerce platform with full Persian language support, security implementations, and performance optimizations.

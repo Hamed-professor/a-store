@@ -1,0 +1,264 @@
+// src/components/product/WishlistButton.tsx
+
+import React, { useState } from 'react';
+import { Heart } from 'lucide-react';
+import { useWishlist } from '../../hooks/useWishlist';
+
+interface WishlistButtonProps {
+  productId: string;
+  size?: 'sm' | 'md' | 'lg';
+  variant?: 'icon' | 'button';
+  showText?: boolean;
+  className?: string;
+  locale?: 'fa' | 'en';
+  onToggle?: (isInWishlist: boolean) => void;
+}
+
+const WishlistButton: React.FC<WishlistButtonProps> = ({
+  productId,
+  size = 'md',
+  variant = 'icon',
+  showText = false,
+  className = '',
+  locale = 'fa',
+  onToggle
+}) => {
+  const { isInWishlist, toggleWishlist, loading } = useWishlist();
+  const [isAnimating, setIsAnimating] = useState(false);
+  const inWishlist = isInWishlist(productId);
+
+  // Size configurations
+  const sizeClasses = {
+    sm: {
+      container: 'w-8 h-8',
+      icon: 'w-4 h-4',
+      text: 'text-xs',
+      padding: 'px-2 py-1'
+    },
+    md: {
+      container: 'w-10 h-10',
+      icon: 'w-5 h-5',
+      text: 'text-sm',
+      padding: 'px-3 py-2'
+    },
+    lg: {
+      container: 'w-12 h-12',
+      icon: 'w-6 h-6',
+      text: 'text-base',
+      padding: 'px-4 py-3'
+    }
+  };
+
+  const handleToggle = async () => {
+    if (loading) return;
+
+    try {
+      setIsAnimating(true);
+      await toggleWishlist(productId);
+      onToggle?.(inWishlist);
+    } catch (error) {
+      console.error('Failed to toggle wishlist:', error);
+    } finally {
+      setTimeout(() => setIsAnimating(false), 600);
+    }
+  };
+
+  const getText = () => {
+    if (locale === 'fa') {
+      return inWishlist ? 'حذف از علاقه‌مندی‌ها' : 'افزودن به علاقه‌مندی‌ها';
+    } else {
+      return inWishlist ? 'Remove from Wishlist' : 'Add to Wishlist';
+    }
+  };
+
+  const getShortText = () => {
+    if (locale === 'fa') {
+      return inWishlist ? 'حذف' : 'افزودن';
+    } else {
+      return inWishlist ? 'Remove' : 'Add';
+    }
+  };
+
+  if (variant === 'button') {
+    return (
+      <button
+        onClick={handleToggle}
+        disabled={loading}
+        className={`
+          inline-flex items-center justify-center gap-2 rounded-lg font-medium
+          transition-all duration-300 transform
+          ${sizeClasses[size].padding} ${sizeClasses[size].text}
+          ${inWishlist
+            ? 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 hover:border-red-300'
+            : 'bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100 hover:border-gray-300'
+          }
+          ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105 active:scale-95'}
+          ${isAnimating ? 'animate-pulse' : ''}
+          ${className}
+        `}
+        title={getText()}
+        aria-label={getText()}
+      >
+        <div className="relative">
+          <Heart
+            className={`
+              ${sizeClasses[size].icon}
+              transition-all duration-300
+              ${inWishlist ? 'fill-red-500 text-red-500' : 'text-current'}
+              ${isAnimating ? 'animate-bounce' : ''}
+            `}
+          />
+          {/* Pulse effect */}
+          {isAnimating && (
+            <div className={`
+              absolute inset-0 rounded-full
+              ${inWishlist ? 'bg-red-400' : 'bg-gray-400'}
+              animate-ping opacity-75
+            `} />
+          )}
+        </div>
+        {showText && (
+          <span className="whitespace-nowrap">
+            {getShortText()}
+          </span>
+        )}
+      </button>
+    );
+  }
+
+  return (
+    <button
+      onClick={handleToggle}
+      disabled={loading}
+      className={`
+        relative inline-flex items-center justify-center rounded-full
+        transition-all duration-300 transform
+        ${sizeClasses[size].container}
+        ${inWishlist
+          ? 'bg-red-50 text-red-500 border-2 border-red-200 hover:bg-red-100 shadow-lg shadow-red-500/20'
+          : 'bg-white text-gray-400 border-2 border-gray-200 hover:bg-gray-50 hover:text-red-500 hover:border-red-200 shadow-md'
+        }
+        ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:scale-110 active:scale-95'}
+        ${isAnimating ? 'animate-pulse' : ''}
+        ${className}
+      `}
+      title={getText()}
+      aria-label={getText()}
+    >
+      <div className="relative">
+        <Heart
+          className={`
+            ${sizeClasses[size].icon}
+            transition-all duration-300
+            ${inWishlist ? 'fill-current' : ''}
+            ${isAnimating ? 'animate-bounce' : ''}
+          `}
+        />
+        
+        {/* Loading spinner */}
+        {loading && (
+          <div className={`
+            absolute inset-0 border-2 border-gray-300 border-t-red-500
+            rounded-full animate-spin
+          `} />
+        )}
+        
+        {/* Pulse effect on toggle */}
+        {isAnimating && !loading && (
+          <div className={`
+            absolute inset-0 -m-2 rounded-full
+            ${inWishlist ? 'bg-red-400' : 'bg-gray-400'}
+            animate-ping opacity-75
+          `} />
+        )}
+        
+        {/* Heart break animation for removal */}
+        {isAnimating && !inWishlist && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-1 h-4 bg-red-500 animate-pulse" />
+          </div>
+        )}
+      </div>
+      
+      {/* Floating heart animation on add */}
+      {isAnimating && inWishlist && (
+        <div className="absolute -top-2 -right-2">
+          <Heart className="w-3 h-3 fill-red-500 text-red-500 animate-bounce" />
+        </div>
+      )}
+    </button>
+  );
+};
+
+// Compound component for wishlist status display
+const WishlistStatus: React.FC<{
+  productId: string;
+  locale?: 'fa' | 'en';
+  className?: string;
+}> = ({ productId, locale = 'fa', className = '' }) => {
+  const { isInWishlist } = useWishlist();
+  const inWishlist = isInWishlist(productId);
+
+  if (!inWishlist) return null;
+
+  return (
+    <div className={`
+      inline-flex items-center gap-1 px-2 py-1 rounded-full
+      bg-red-50 text-red-600 border border-red-200 text-xs
+      ${className}
+    `}>
+      <Heart className="w-3 h-3 fill-current" />
+      <span>{locale === 'fa' ? 'در علاقه‌مندی‌ها' : 'In Wishlist'}</span>
+    </div>
+  );
+};
+
+// Hook for wishlist count in header
+const useWishlistCount = () => {
+  const { wishlistItems } = useWishlist();
+  return wishlistItems.length;
+};
+
+// Wishlist floating action button
+const WishlistFAB: React.FC<{
+  locale?: 'fa' | 'en';
+  className?: string;
+  onClick?: () => void;
+}> = ({ locale = 'fa', className = '', onClick }) => {
+  const count = useWishlistCount();
+
+  if (count === 0) return null;
+
+  return (
+    <button
+      onClick={onClick}
+      className={`
+        fixed bottom-6 right-6 z-50 
+        bg-red-500 hover:bg-red-600 text-white
+        w-14 h-14 rounded-full shadow-lg
+        flex items-center justify-center
+        transition-all duration-300 transform
+        hover:scale-110 active:scale-95
+        ${className}
+      `}
+      title={locale === 'fa' ? 'مشاهده علاقه‌مندی‌ها' : 'View Wishlist'}
+    >
+      <div className="relative">
+        <Heart className="w-6 h-6 fill-current" />
+        {count > 0 && (
+          <span className="
+            absolute -top-2 -right-2 bg-white text-red-500
+            w-6 h-6 rounded-full text-xs font-bold
+            flex items-center justify-center
+            border-2 border-red-500
+          ">
+            {count > 99 ? '99+' : count}
+          </span>
+        )}
+      </div>
+    </button>
+  );
+};
+
+export default WishlistButton;
+export { WishlistStatus, WishlistFAB, useWishlistCount };

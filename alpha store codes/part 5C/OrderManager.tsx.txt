@@ -1,0 +1,201 @@
+// src/components/Order/OrderManager.tsx
+import React, { useState, useMemo } from 'react';
+import { 
+  ShoppingCart, Search, Filter, Download, Eye, Edit, 
+  CheckCircle, Clock, AlertCircle, XCircle, Activity, Package,
+  FileText, Mail, Phone
+} from 'lucide-react';
+
+interface Order {
+  id: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone?: string;
+  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+  total: number;
+  items: number;
+  date: string;
+  paymentStatus: 'paid' | 'pending' | 'failed';
+  shippingAddress: string;
+}
+
+interface OrderManagerProps {
+  orders?: Order[];
+  onOrderClick?: (order: Order) => void;
+  onInvoiceClick?: (order: Order) => void;
+}
+
+const OrderManager: React.FC<OrderManagerProps> = ({
+  orders = [],
+  onOrderClick,
+  onInvoiceClick
+}) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+
+  const filteredOrders = useMemo(() => {
+    return orders.filter(order => {
+      const matchesSearch = order.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          order.id.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [orders, searchQuery, statusFilter]);
+
+  const getStatusColor = (status: string) => {
+    const colors = {
+      pending: 'text-yellow-600 bg-yellow-50 border-yellow-200',
+      processing: 'text-blue-600 bg-blue-50 border-blue-200',
+      shipped: 'text-green-600 bg-green-50 border-green-200',
+      delivered: 'text-emerald-600 bg-emerald-50 border-emerald-200',
+      cancelled: 'text-red-600 bg-red-50 border-red-200'
+    };
+    return colors[status] || 'text-gray-600 bg-gray-50 border-gray-200';
+  };
+
+  const getStatusIcon = (status: string) => {
+    const icons = {
+      pending: <Clock className="w-4 h-4" />,
+      processing: <Activity className="w-4 h-4" />,
+      shipped: <Package className="w-4 h-4" />,
+      delivered: <CheckCircle className="w-4 h-4" />,
+      cancelled: <XCircle className="w-4 h-4" />
+    };
+    return icons[status] || <AlertCircle className="w-4 h-4" />;
+  };
+
+  const getStatusText = (status: string) => {
+    const statusTexts = {
+      pending: 'در انتظار',
+      processing: 'در حال پردازش',
+      shipped: 'ارسال شده',
+      delivered: 'تحویل شده',
+      cancelled: 'لغو شده'
+    };
+    return statusTexts[status] || status;
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-900">مدیریت سفارشات</h2>
+        <div className="flex gap-3">
+          <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 transition-colors">
+            <Download className="w-4 h-4" />
+            خروجی اکسل
+          </button>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="flex gap-4 flex-wrap">
+          <div className="flex-1 min-w-64">
+            <div className="relative">
+              <Search className="w-5 h-5 absolute right-3 top-3 text-gray-400" />
+              <input
+                type="text"
+                placeholder="جستجو در سفارشات..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pr-10 pl-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+              />
+            </div>
+          </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+          >
+            <option value="all">همه وضعیت‌ها</option>
+            <option value="pending">در انتظار</option>
+            <option value="processing">در حال پردازش</option>
+            <option value="shipped">ارسال شده</option>
+            <option value="delivered">تحویل شده</option>
+            <option value="cancelled">لغو شده</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Orders Table */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="text-right p-4 font-semibold text-gray-900">شماره سفارش</th>
+                <th className="text-right p-4 font-semibold text-gray-900">مشتری</th>
+                <th className="text-right p-4 font-semibold text-gray-900">وضعیت</th>
+                <th className="text-right p-4 font-semibold text-gray-900">مبلغ</th>
+                <th className="text-right p-4 font-semibold text-gray-900">تعداد کالا</th>
+                <th className="text-right p-4 font-semibold text-gray-900">تاریخ</th>
+                <th className="text-center p-4 font-semibold text-gray-900">عملیات</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {filteredOrders.map((order) => (
+                <tr key={order.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="p-4">
+                    <div className="font-medium text-blue-600">{order.id}</div>
+                  </td>
+                  <td className="p-4">
+                    <div className="font-medium text-gray-900">{order.customerName}</div>
+                    <div className="text-sm text-gray-500">{order.customerEmail}</div>
+                  </td>
+                  <td className="p-4">
+                    <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(order.status)}`}>
+                      {getStatusIcon(order.status)}
+                      {getStatusText(order.status)}
+                    </span>
+                  </td>
+                  <td className="p-4">
+                    <div className="font-medium text-gray-900">{order.total.toLocaleString()} تومان</div>
+                    <div className={`text-xs ${order.paymentStatus === 'paid' ? 'text-green-600' : 'text-red-600'}`}>
+                      {order.paymentStatus === 'paid' ? 'پرداخت شده' : 'پرداخت نشده'}
+                    </div>
+                  </td>
+                  <td className="p-4 text-gray-600">{order.items} قلم</td>
+                  <td className="p-4 text-gray-600">{order.date}</td>
+                  <td className="p-4">
+                    <div className="flex justify-center gap-1">
+                      <button
+                        onClick={() => onOrderClick?.(order)}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="مشاهده جزئیات"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => onInvoiceClick?.(order)}
+                        className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                        title="صدور فاکتور"
+                      >
+                        <FileText className="w-4 h-4" />
+                      </button>
+                      <button 
+                        className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors" 
+                        title="ویرایش"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {filteredOrders.length === 0 && (
+          <div className="text-center py-12">
+            <ShoppingCart className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-500">هیچ سفارشی یافت نشد</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default OrderManager;

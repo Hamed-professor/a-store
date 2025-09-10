@@ -1,0 +1,191 @@
+// src/hooks/useCheckout.ts
+import { useState, useCallback } from 'react';
+import { CheckoutStep, ShippingAddress, ShippingMethod, Order } from '../types/order';
+
+export interface CheckoutState {
+  currentStep: number;
+  steps: CheckoutStep[];
+  shippingAddress: Partial<ShippingAddress>;
+  billingAddress: Partial<ShippingAddress>;
+  useSameAddress: boolean;
+  selectedShippingMethod?: ShippingMethod;
+  isGuestCheckout: boolean;
+}
+
+const CHECKOUT_STEPS: CheckoutStep[] = [
+  {
+    id: 'shipping',
+    name: 'Shipping',
+    namePersian: 'آدرس ارسال',
+    isCompleted: false,
+    isActive: true
+  },
+  {
+    id: 'payment',
+    name: 'Payment',
+    namePersian: 'پرداخت',
+    isCompleted: false,
+    isActive: false
+  },
+  {
+    id: 'review',
+    name: 'Review',
+    namePersian: 'بررسی نهایی',
+    isCompleted: false,
+    isActive: false
+  },
+  {
+    id: 'confirm',
+    name: 'Confirm',
+    namePersian: 'تأیید سفارش',
+    isCompleted: false,
+    isActive: false
+  }
+];
+
+export const useCheckout = () => {
+  const [checkoutState, setCheckoutState] = useState<CheckoutState>({
+    currentStep: 0,
+    steps: CHECKOUT_STEPS,
+    shippingAddress: {},
+    billingAddress: {},
+    useSameAddress: true,
+    isGuestCheckout: false
+  });
+
+  const updateStep = useCallback((stepIndex: number) => {
+    setCheckoutState(prev => {
+      const newSteps = prev.steps.map((step, index) => ({
+        ...step,
+        isCompleted: index < stepIndex,
+        isActive: index === stepIndex
+      }));
+
+      return {
+        ...prev,
+        currentStep: stepIndex,
+        steps: newSteps
+      };
+    });
+  }, []);
+
+  const nextStep = useCallback(() => {
+    setCheckoutState(prev => {
+      const nextStepIndex = Math.min(prev.currentStep + 1, prev.steps.length - 1);
+      const newSteps = prev.steps.map((step, index) => ({
+        ...step,
+        isCompleted: index < nextStepIndex,
+        isActive: index === nextStepIndex
+      }));
+
+      return {
+        ...prev,
+        currentStep: nextStepIndex,
+        steps: newSteps
+      };
+    });
+  }, []);
+
+  const previousStep = useCallback(() => {
+    setCheckoutState(prev => {
+      const prevStepIndex = Math.max(prev.currentStep - 1, 0);
+      const newSteps = prev.steps.map((step, index) => ({
+        ...step,
+        isCompleted: index < prevStepIndex,
+        isActive: index === prevStepIndex
+      }));
+
+      return {
+        ...prev,
+        currentStep: prevStepIndex,
+        steps: newSteps
+      };
+    });
+  }, []);
+
+  const updateShippingAddress = useCallback((address: Partial<ShippingAddress>) => {
+    setCheckoutState(prev => ({
+      ...prev,
+      shippingAddress: { ...prev.shippingAddress, ...address },
+      billingAddress: prev.useSameAddress ? { ...prev.shippingAddress, ...address } : prev.billingAddress
+    }));
+  }, []);
+
+  const updateBillingAddress = useCallback((address: Partial<ShippingAddress>) => {
+    setCheckoutState(prev => ({
+      ...prev,
+      billingAddress: { ...prev.billingAddress, ...address }
+    }));
+  }, []);
+
+  const toggleSameAddress = useCallback(() => {
+    setCheckoutState(prev => ({
+      ...prev,
+      useSameAddress: !prev.useSameAddress,
+      billingAddress: !prev.useSameAddress ? prev.shippingAddress : prev.billingAddress
+    }));
+  }, []);
+
+  const selectShippingMethod = useCallback((method: ShippingMethod) => {
+    setCheckoutState(prev => ({
+      ...prev,
+      selectedShippingMethod: method
+    }));
+  }, []);
+
+  const setGuestCheckout = useCallback((isGuest: boolean) => {
+    setCheckoutState(prev => ({
+      ...prev,
+      isGuestCheckout: isGuest
+    }));
+  }, []);
+
+  const validateCurrentStep = useCallback((): boolean => {
+    const { currentStep, shippingAddress, selectedShippingMethod } = checkoutState;
+
+    switch (currentStep) {
+      case 0: // Shipping
+        return !!(
+          shippingAddress.firstName &&
+          shippingAddress.lastName &&
+          shippingAddress.phoneNumber &&
+          shippingAddress.province &&
+          shippingAddress.city &&
+          shippingAddress.address &&
+          shippingAddress.postalCode &&
+          selectedShippingMethod
+        );
+      case 1: // Payment
+        return true; // Payment validation handled by payment component
+      case 2: // Review
+        return true; // Review step is always valid
+      default:
+        return false;
+    }
+  }, [checkoutState]);
+
+  const resetCheckout = useCallback(() => {
+    setCheckoutState({
+      currentStep: 0,
+      steps: CHECKOUT_STEPS,
+      shippingAddress: {},
+      billingAddress: {},
+      useSameAddress: true,
+      isGuestCheckout: false
+    });
+  }, []);
+
+  return {
+    ...checkoutState,
+    updateStep,
+    nextStep,
+    previousStep,
+    updateShippingAddress,
+    updateBillingAddress,
+    toggleSameAddress,
+    selectShippingMethod,
+    setGuestCheckout,
+    validateCurrentStep,
+    resetCheckout
+  };
+};

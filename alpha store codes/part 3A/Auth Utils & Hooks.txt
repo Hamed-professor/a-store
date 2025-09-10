@@ -1,0 +1,416 @@
+// src/utils/auth.ts
+import { User } from '../types/auth';
+
+const TOKEN_KEY = 'alpha_store_token';
+const REFRESH_TOKEN_KEY = 'alpha_store_refresh_token';
+const USER_KEY = 'alpha_store_user';
+const REMEMBER_ME_KEY = 'alpha_store_remember_me';
+
+export const tokenStorage = {
+  getToken: (): string | null => {
+    const rememberMe = localStorage.getItem(REMEMBER_ME_KEY) === 'true';
+    if (rememberMe) {
+      return localStorage.getItem(TOKEN_KEY);
+    }
+    return sessionStorage.getItem(TOKEN_KEY);
+  },
+
+  setToken: (token: string, rememberMe: boolean = false): void => {
+    localStorage.setItem(REMEMBER_ME_KEY, rememberMe.toString());
+    if (rememberMe) {
+      localStorage.setItem(TOKEN_KEY, token);
+      sessionStorage.removeItem(TOKEN_KEY);
+    } else {
+      sessionStorage.setItem(TOKEN_KEY, token);
+      localStorage.removeItem(TOKEN_KEY);
+    }
+  },
+
+  getRefreshToken: (): string | null => {
+    return localStorage.getItem(REFRESH_TOKEN_KEY);
+  },
+
+  setRefreshToken: (refreshToken: string): void => {
+    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+  },
+
+  getUser: (): User | null => {
+    const userJson = localStorage.getItem(USER_KEY) || sessionStorage.getItem(USER_KEY);
+    if (userJson) {
+      try {
+        return JSON.parse(userJson);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  },
+
+  setUser: (user: User, rememberMe: boolean = false): void => {
+    const userJson = JSON.stringify(user);
+    if (rememberMe) {
+      localStorage.setItem(USER_KEY, userJson);
+      sessionStorage.removeItem(USER_KEY);
+    } else {
+      sessionStorage.setItem(USER_KEY, userJson);
+      localStorage.removeItem(USER_KEY);
+    }
+  },
+
+  clearAll: (): void => {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+    localStorage.removeItem(REMEMBER_ME_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(USER_KEY);
+  },
+};
+
+export const isTokenExpired = (token: string): boolean => {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.exp * 1000 < Date.now();
+  } catch {
+    return true;
+  }
+};
+
+export const generateOTP = (): string => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+export const convertToPersianDigits = (num: string | number): string => {
+  const persianDigits = '۰۱۲۳۴۵۶۷۸۹';
+  return num.toString().replace(/\d/g, (digit) => persianDigits[parseInt(digit)]);
+};
+
+export const convertToEnglishDigits = (persianNum: string): string => {
+  const persianDigits = '۰۱۲۳۴۵۶۷۸۹';
+  return persianNum.replace(/[۰-۹]/g, (digit) => 
+    persianDigits.indexOf(digit).toString()
+  );
+};
+
+// src/hooks/useAuth.ts
+import { useState, useEffect, useContext, createContext, useCallback, ReactNode } from 'react';
+import { AuthState, User, LoginFormData, RegisterFormData } from '../types/auth';
+import { tokenStorage, isTokenExpired } from '../utils/auth';
+
+interface AuthContextType extends AuthState {
+  login: (data: LoginFormData) => Promise<void>;
+  register: (data: RegisterFormData) => Promise<void>;
+  logout: () => void;
+  refreshToken: () => Promise<void>;
+  clearError: () => void;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [state, setState] = useState<AuthState>({
+    user: null,
+    token: null,
+    refreshToken: null,
+    isAuthenticated: false,
+    isLoading: true,
+    error: null,
+  });
+
+  const setError = (error: string) => {
+    setState(prev => ({ ...prev, error, isLoading: false }));
+  };
+
+  const clearError = () => {
+    setState(prev => ({ ...prev, error: null }));
+  };
+
+  const login = useCallback(async (data: LoginFormData) => {
+    setState(prev => ({ ...prev, isLoading: true, error: null }));
+    
+    try {
+      // Simulate API call - replace with actual API
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // Mock successful login
+      const mockUser: User = {
+        id: '1',
+        email: data.emailOrPhone.includes('@') ? data.emailOrPhone : 'user@example.com',
+        phone: data.emailOrPhone.includes('@') ? '+989123456789' : data.emailOrPhone,
+        firstName: 'کاربر',
+        lastName: 'آلفا استور',
+        emailVerified: true,
+        phoneVerified: true,
+        createdAt: new Date().toISOString(),
+        role: 'customer',
+      };
+
+      const mockToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJhbHBoYS1zdG9yZSIsImF1ZCI6ImFscGhhLXN0b3JlIiwiaWF0IjoxNjM5NTEyMDAwLCJleHAiOjE5NTQ4NzIwMDAsInN1YiI6IjEifQ.example';
+      const mockRefreshToken = 'refresh-token-example';
+
+      tokenStorage.setToken(mockToken, data.rememberMe);
+      tokenStorage.setRefreshToken(mockRefreshToken);
+      tokenStorage.setUser(mockUser, data.rememberMe);
+
+      setState(prev => ({
+        ...prev,
+        user: mockUser,
+        token: mockToken,
+        refreshToken: mockRefreshToken,
+        isAuthenticated: true,
+        isLoading: false,
+        error: null,
+      }));
+    } catch (error) {
+      setError('خطا در ورود به حساب کاربری. لطفاً دوباره تلاش کنید.');
+    }
+  }, []);
+
+  const register = useCallback(async (data: RegisterFormData) => {
+    setState(prev => ({ ...prev, isLoading: true, error: null }));
+    
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Mock successful registration
+      const mockUser: User = {
+        id: '2',
+        email: data.email,
+        phone: data.phone,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        emailVerified: false,
+        phoneVerified: false,
+        createdAt: new Date().toISOString(),
+        role: 'customer',
+      };
+
+      setState(prev => ({
+        ...prev,
+        user: mockUser,
+        isLoading: false,
+        error: null,
+      }));
+    } catch (error) {
+      setError('خطا در ایجاد حساب کاربری. لطفاً دوباره تلاش کنید.');
+    }
+  }, []);
+
+  const logout = useCallback(() => {
+    tokenStorage.clearAll();
+    setState({
+      user: null,
+      token: null,
+      refreshToken: null,
+      isAuthenticated: false,
+      isLoading: false,
+      error: null,
+    });
+  }, []);
+
+  const refreshToken = useCallback(async () => {
+    const currentRefreshToken = tokenStorage.getRefreshToken();
+    
+    if (!currentRefreshToken) {
+      logout();
+      return;
+    }
+
+    try {
+      // Simulate refresh token API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      const newToken = 'new-jwt-token-example';
+      tokenStorage.setToken(newToken, false);
+      
+      setState(prev => ({
+        ...prev,
+        token: newToken,
+        error: null,
+      }));
+    } catch (error) {
+      logout();
+    }
+  }, [logout]);
+
+  // Initialize auth state on mount
+  useEffect(() => {
+    const initAuth = () => {
+      const token = tokenStorage.getToken();
+      const user = tokenStorage.getUser();
+      const refreshTokenValue = tokenStorage.getRefreshToken();
+
+      if (token && user && !isTokenExpired(token)) {
+        setState({
+          user,
+          token,
+          refreshToken: refreshTokenValue,
+          isAuthenticated: true,
+          isLoading: false,
+          error: null,
+        });
+      } else if (refreshTokenValue) {
+        refreshToken();
+      } else {
+        setState(prev => ({ ...prev, isLoading: false }));
+      }
+    };
+
+    initAuth();
+  }, [refreshToken]);
+
+  const contextValue: AuthContextType = {
+    ...state,
+    login,
+    register,
+    logout,
+    refreshToken,
+    clearError,
+  };
+
+  return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;
+};
+
+export const useAuth = (): AuthContextType => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
+
+// src/hooks/useOTP.ts
+import { useState, useCallback, useEffect } from 'react';
+
+interface OTPState {
+  code: string;
+  isLoading: boolean;
+  error: string | null;
+  timeLeft: number;
+  canResend: boolean;
+}
+
+interface UseOTPReturn extends OTPState {
+  setCode: (code: string) => void;
+  sendOTP: (phone: string, type?: string) => Promise<void>;
+  verifyOTP: (code: string) => Promise<boolean>;
+  resendOTP: () => Promise<void>;
+  clearError: () => void;
+  reset: () => void;
+}
+
+export const useOTP = (initialTimeLeft: number = 120): UseOTPReturn => {
+  const [state, setState] = useState<OTPState>({
+    code: '',
+    isLoading: false,
+    error: null,
+    timeLeft: initialTimeLeft,
+    canResend: false,
+  });
+
+  const [currentPhone, setCurrentPhone] = useState<string>('');
+  const [currentType, setCurrentType] = useState<string>('login');
+
+  const clearError = () => {
+    setState(prev => ({ ...prev, error: null }));
+  };
+
+  const setCode = (code: string) => {
+    // Only allow digits and limit to 6 characters
+    const cleanCode = code.replace(/\D/g, '').slice(0, 6);
+    setState(prev => ({ ...prev, code: cleanCode }));
+  };
+
+  const sendOTP = useCallback(async (phone: string, type: string = 'login') => {
+    setState(prev => ({ ...prev, isLoading: true, error: null, timeLeft: initialTimeLeft, canResend: false }));
+    setCurrentPhone(phone);
+    setCurrentType(type);
+    
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Mock success
+      setState(prev => ({ ...prev, isLoading: false }));
+    } catch (error) {
+      setState(prev => ({ 
+        ...prev, 
+        isLoading: false, 
+        error: 'خطا در ارسال کد تأیید. لطفاً دوباره تلاش کنید.' 
+      }));
+    }
+  }, [initialTimeLeft]);
+
+  const verifyOTP = useCallback(async (code: string) => {
+    setState(prev => ({ ...prev, isLoading: true, error: null }));
+    
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Mock verification - accept "123456" as valid code
+      if (code === '123456') {
+        setState(prev => ({ ...prev, isLoading: false }));
+        return true;
+      } else {
+        setState(prev => ({ 
+          ...prev, 
+          isLoading: false, 
+          error: 'کد تأیید اشتباه است. لطفاً دوباره تلاش کنید.' 
+        }));
+        return false;
+      }
+    } catch (error) {
+      setState(prev => ({ 
+        ...prev, 
+        isLoading: false, 
+        error: 'خطا در تأیید کد. لطفاً دوباره تلاش کنید.' 
+      }));
+      return false;
+    }
+  }, []);
+
+  const resendOTP = useCallback(async () => {
+    if (currentPhone) {
+      await sendOTP(currentPhone, currentType);
+    }
+  }, [currentPhone, currentType, sendOTP]);
+
+  const reset = () => {
+    setState({
+      code: '',
+      isLoading: false,
+      error: null,
+      timeLeft: initialTimeLeft,
+      canResend: false,
+    });
+    setCurrentPhone('');
+    setCurrentType('login');
+  };
+
+  // Timer effect
+  useEffect(() => {
+    if (state.timeLeft > 0) {
+      const timer = setTimeout(() => {
+        setState(prev => ({
+          ...prev,
+          timeLeft: prev.timeLeft - 1,
+          canResend: prev.timeLeft - 1 <= 0,
+        }));
+      }, 1000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [state.timeLeft]);
+
+  return {
+    ...state,
+    setCode,
+    sendOTP,
+    verifyOTP,
+    resendOTP,
+    clearError,
+    reset,
+  };
+};

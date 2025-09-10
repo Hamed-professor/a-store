@@ -1,0 +1,80 @@
+// src/components/auth/OTPVerification.tsx
+import React, { useState, useRef, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { yupResolver } from '@hookform/resolvers/yup';
+import { 
+  Smartphone, 
+  Mail, 
+  Loader, 
+  RefreshCw, 
+  CheckCircle,
+  AlertCircle,
+  ArrowLeft 
+} from 'lucide-react';
+import { otpSchema } from '../../schemas/authSchemas';
+import { useOTP } from '../../hooks/useOTP';
+import { convertToPersianDigits, convertToEnglishDigits } from '../../utils/auth';
+
+interface OTPVerificationProps {
+  phone?: string;
+  email?: string;
+  type: 'registration' | 'login' | 'password_reset';
+  onSuccess: (code: string) => void;
+  onBack?: () => void;
+  onResend?: () => void;
+}
+
+export const OTPVerification: React.FC<OTPVerificationProps> = ({
+  phone,
+  email,
+  type,
+  onSuccess,
+  onBack,
+  onResend,
+}) => {
+  const [otpValues, setOtpValues] = useState<string[]>(['', '', '', '', '', '']);
+  const [isSuccess, setIsSuccess] = useState(false);
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  
+  const {
+    code,
+    setCode,
+    isLoading,
+    error,
+    timeLeft,
+    canResend,
+    sendOTP,
+    verifyOTP,
+    resendOTP,
+    clearError,
+  } = useOTP();
+
+  const {
+    handleSubmit,
+    formState: { isValid },
+    setValue,
+    trigger,
+  } = useForm({
+    resolver: yupResolver(otpSchema),
+    mode: 'onChange',
+  });
+
+  // Initialize OTP sending
+  useEffect(() => {
+    if (phone && type) {
+      sendOTP(phone, type);
+    }
+  }, [phone, type, sendOTP]);
+
+  // Update form value when code changes
+  useEffect(() => {
+    setValue('code', otpValues.join(''));
+    trigger('code');
+  }, [otpValues, setValue, trigger]);
+
+  const handleOtpChange = (index: number, value: string) => {
+    // Only allow digits
+    const numericValue = convertToEnglishDigits(value.replace(/\D/g, ''));
+    
+    if (numericValue.length <= 1) {
+      const newOtpValues = [...

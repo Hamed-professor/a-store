@@ -1,0 +1,421 @@
+// src/components/product/ProductGrid.tsx
+
+import React, { useState, useEffect, useRef } from 'react';
+import { Grid, List, Filter, SortAsc, Search, Package, RefreshCw } from 'lucide-react';
+import { Product, ProductSortOption, sortOptions } from '../../types/product';
+import { useProducts } from '../../hooks/useProducts';
+import ProductCard from './ProductCard';
+import ProductSkeleton from './ProductSkeleton';
+
+interface ProductGridProps {
+  categorySlug?: string;
+  initialFilters?: any;
+  initialSort?: ProductSortOption['key'];
+  locale?: 'fa' | 'en';
+  className?: string;
+  itemsPerPage?: number;
+  enableInfiniteScroll?: boolean;
+  showViewToggle?: boolean;
+  showSort?: boolean;
+  showFilters?: boolean;
+  onProductClick?: (product: Product) => void;
+  onAddToCart?: (productId: string) => void;
+}
+
+type ViewMode = 'grid' | 'list';
+
+const ProductGrid: React.FC<ProductGridProps> = ({
+  categorySlug,
+  initialFilters = {},
+  initialSort = 'newest',
+  locale = 'fa',
+  className = '',
+  itemsPerPage = 12,
+  enableInfiniteScroll = true,
+  showViewToggle = true,
+  showSort = true,
+  showFilters = false,
+  onProductClick,
+  onAddToCart
+}) => {
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [searchTerm, setSearchTerm] = useState('');
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  const {
+    products,
+    loading,
+    error,
+    hasMore,
+    totalCount,
+    loadMore,
+    refetch,
+    setFilters,
+    setSortBy
+  } = useProducts({
+    categorySlug,
+    filters: initialFilters,
+    sortBy: initialSort,
+    limit: itemsPerPage
+  });
+
+  // Intersection Observer for infinite scroll
+  useEffect(() => {
+    if (!enableInfiniteScroll || loading || !hasMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          loadMore();
+        }
+      },
+      { threshold: 0.1, rootMargin: '100px' }
+    );
+
+    if (loadMoreRef.current) {
+      observer.observe(loadMoreRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [enableInfiniteScroll, loading, hasMore, loadMore]);
+
+  // Filter products by search term (client-side)
+  const filteredProducts = products.filter(product => {
+    if (!searchTerm) return true;
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      product.name[locale].toLowerCase().includes(searchLower) ||
+      product.description[locale].toLowerCase().includes(searchLower) ||
+      product.category.name[locale].toLowerCase().includes(searchLower) ||
+      product.tags.some(tag => tag.toLowerCase().includes(searchLower))
+    );
+  });
+
+  const handleSortChange = (sortKey: ProductSortOption['key']) => {
+    setSortBy(sortKey);
+  };
+
+  const handleRefresh = () => {
+    refetch();
+  };
+
+  const renderEmptyState = () => (
+    <div className="col-span-full flex flex-col items-center justify-center py-16 text-center">
+      <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+        <Package className="w-12 h-12 text-gray-400" />
+      </div>
+      <h3 className="text-xl font-semibold text-gray-900 mb-2">
+        {locale === 'fa' ? 'محصولی یافت نشد' : 'No products found'}
+      </h3>
+      <p className="text-gray-500 mb-6 max-w-md">
+        {locale === 'fa' 
+          ? 'متأسفانه محصولی با این مشخصات یافت نشد. لطفاً فیلترها را تغییر دهید یا دوباره تلاش کنید.'
+          : 'Sorry, no products match your criteria. Please try adjusting your filters or search terms.'
+        }
+      </p>
+      <button
+        onClick={handleRefresh}
+        className="inline-flex items-center gap-2 bg-black text-white px-6 py-3 rounded-lg hover:bg-gray-800 transition-colors duration-200"
+      >
+        <RefreshCw className="w-4 h-4" />
+        <span>{locale === 'fa' ? 'تلاش مجدد' : 'Try Again'}</span>
+      </button>
+    </div>
+  );
+
+  const renderError = () => (
+    <div className="col-span-full flex flex-col items-center justify-center py-16 text-center">
+      <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mb-4">
+        <Package className="w-12 h-12 text-red-400" />
+      </div>
+      <h3 className="text-xl font-semibold text-red-900 mb-2">
+        {locale === 'fa' ? 'خطا در بارگذاری محصولات' : 'Error loading products'}
+      </h3>
+      <p className="text-red-600 mb-6 max-w-md">
+        {error}
+      </p>
+      <button
+        onClick={handleRefresh}
+        className="inline-flex items-center gap-2 bg-red-500 text-white px-6 py-3 rounded-lg hover:bg-red-600 transition-colors duration-200"
+      >
+        <RefreshCw className="w-4 h-4" />
+        <span>{locale === 'fa' ? 'تلاش مجدد' : 'Retry'}</span>
+      </button>
+    </div>
+  );
+
+  const renderGridView = () => (
+    <div className={`
+      grid gap-6 
+      ${viewMode === 'grid' 
+        ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' 
+        : 'grid-cols-1'
+      }
+    `}>
+      {filteredProducts.map((product, index) => (
+        <div
+          key={product.id}
+          className="animate-fadeIn"
+          style={{ animationDelay: `${index * 0.1}s` }}
+        >
+          {viewMode === 'grid' ? (
+            <ProductCard
+              product={product}
+              locale={locale}
+              onProductClick={onProductClick}
+              onAddToCart={onAddToCart}
+            />
+          ) : (
+            <ProductListItem
+              product={product}
+              locale={locale}
+              onProductClick={onProductClick}
+              onAddToCart={onAddToCart}
+            />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className={`space-y-6 ${className}`}>
+      {/* Header Controls */}
+      <div className="flex flex-col lg:flex-row gap-4 lg:items-center lg:justify-between">
+        {/* Left Section */}
+        <div className="flex items-center gap-4">
+          {/* Results Count */}
+          <div className="text-gray-600">
+            <span className="font-medium">
+              {locale === 'fa' 
+                ? `${totalCount} محصول یافت شد`
+                : `${totalCount} products found`
+              }
+            </span>
+            {searchTerm && (
+              <span className="text-sm text-gray-500 mr-2">
+                {locale === 'fa' 
+                  ? `برای "${searchTerm}"`
+                  : `for "${searchTerm}"`
+                }
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Right Section */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder={locale === 'fa' ? 'جستجو در محصولات...' : 'Search products...'}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none w-64"
+            />
+          </div>
+
+          {/* Sort */}
+          {showSort && (
+            <select
+              onChange={(e) => handleSortChange(e.target.value as ProductSortOption['key'])}
+              className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none"
+            >
+              {sortOptions.map((option) => (
+                <option key={option.key} value={option.key}>
+                  {option.label[locale]}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {/* View Toggle */}
+          {showViewToggle && (
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`
+                  p-2 rounded-md transition-colors duration-200
+                  ${viewMode === 'grid' 
+                    ? 'bg-white text-gray-900 shadow-sm' 
+                    : 'text-gray-500 hover:text-gray-700'
+                  }
+                `}
+                title={locale === 'fa' ? 'نمای شبکه‌ای' : 'Grid View'}
+              >
+                <Grid className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`
+                  p-2 rounded-md transition-colors duration-200
+                  ${viewMode === 'list' 
+                    ? 'bg-white text-gray-900 shadow-sm' 
+                    : 'text-gray-500 hover:text-gray-700'
+                  }
+                `}
+                title={locale === 'fa' ? 'نمای فهرست' : 'List View'}
+              >
+                <List className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Refresh Button */}
+          <button
+            onClick={handleRefresh}
+            disabled={loading}
+            className="p-2 text-gray-500 hover:text-gray-700 disabled:opacity-50"
+            title={locale === 'fa' ? 'به‌روزرسانی' : 'Refresh'}
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="min-h-96">
+        {error ? (
+          renderError()
+        ) : filteredProducts.length === 0 && !loading ? (
+          renderEmptyState()
+        ) : (
+          renderGridView()
+        )}
+
+        {/* Loading Skeletons */}
+        {loading && (
+          <div className="mt-6">
+            <ProductSkeleton
+              variant={viewMode === 'grid' ? 'card' : 'list'}
+              count={viewMode === 'grid' ? 8 : 4}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Infinite Scroll Trigger */}
+      {enableInfiniteScroll && hasMore && !loading && (
+        <div ref={loadMoreRef} className="h-20 flex items-center justify-center">
+          <div className="text-gray-500">
+            {locale === 'fa' ? 'در حال بارگذاری بیشتر...' : 'Loading more...'}
+          </div>
+        </div>
+      )}
+
+      {/* Load More Button (fallback) */}
+      {!enableInfiniteScroll && hasMore && (
+        <div className="flex justify-center pt-8">
+          <button
+            onClick={loadMore}
+            disabled={loading}
+            className="inline-flex items-center gap-2 bg-black text-white px-8 py-3 rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors duration-200"
+          >
+            {loading && <RefreshCw className="w-4 h-4 animate-spin" />}
+            <span>
+              {locale === 'fa' ? 'بارگذاری بیشتر' : 'Load More'}
+            </span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// List view item component
+const ProductListItem: React.FC<{
+  product: Product;
+  locale: 'fa' | 'en';
+  onProductClick?: (product: Product) => void;
+  onAddToCart?: (productId: string) => void;
+}> = ({ product, locale, onProductClick, onAddToCart }) => {
+  const mainImage = product.images.find(img => img.isMain) || product.images[0];
+
+  return (
+    <div 
+      className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 hover:shadow-xl transition-shadow duration-300 cursor-pointer"
+      onClick={() => onProductClick?.(product)}
+    >
+      <div className="flex gap-6">
+        {/* Image */}
+        <div className="flex-shrink-0">
+          <div className="w-32 h-32 bg-gray-100 rounded-lg overflow-hidden">
+            {mainImage && (
+              <img
+                src={mainImage.url}
+                alt={mainImage.alt}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.src = '/api/placeholder/128/128';
+                }}
+              />
+            )}
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 space-y-3">
+          {/* Title */}
+          <h3 className="text-xl font-semibold text-gray-900 line-clamp-1">
+            {product.name[locale]}
+          </h3>
+
+          {/* Description */}
+          <p className="text-gray-600 line-clamp-2 text-sm">
+            {product.description[locale]}
+          </p>
+
+          {/* Category & Brand */}
+          <div className="flex items-center gap-4 text-sm text-gray-500">
+            <span>{product.category.name[locale]}</span>
+            {product.brand && (
+              <>
+                <span>•</span>
+                <span>{product.brand.name}</span>
+              </>
+            )}
+          </div>
+
+          {/* Rating & Price */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {/* Rating stars would go here */}
+              <span className="text-sm text-gray-500">
+                ⭐ {product.rating.average} ({product.rating.count})
+              </span>
+            </div>
+            
+            <div className="text-right">
+              <div className="text-lg font-bold text-gray-900">
+                {product.price.amount.toLocaleString()} {locale === 'fa' ? 'تومان' : 'Toman'}
+              </div>
+              {product.price.originalAmount && product.price.originalAmount > product.price.amount && (
+                <div className="text-sm text-gray-500 line-through">
+                  {product.price.originalAmount.toLocaleString()}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex flex-col gap-2 flex-shrink-0">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onAddToCart?.(product.id);
+            }}
+            disabled={!product.isInStock}
+            className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+          >
+            {locale === 'fa' ? 'افزودن به سبد' : 'Add to Cart'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ProductGrid;

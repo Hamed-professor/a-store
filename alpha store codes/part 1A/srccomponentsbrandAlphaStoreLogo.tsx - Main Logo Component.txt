@@ -1,0 +1,413 @@
+/**
+ * Α Store Logo Component
+ * The centerpiece animated logo system with multiple variations
+ */
+
+import React, { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { getLogoClasses, type AlphaLogoVariation, type AlphaSize, type AlphaTheme, type AlphaLogoAnimation } from '@/utils/brand';
+import { getCurrentDirection } from '@/utils/rtl';
+
+export interface AlphaStoreLogoProps {
+  /** Logo variation style */
+  variation?: AlphaLogoVariation;
+  /** Logo size */
+  size?: AlphaSize;
+  /** Theme variant */
+  theme?: AlphaTheme;
+  /** Animation type */
+  animation?: AlphaLogoAnimation;
+  /** Whether to show text alongside the symbol */
+  showText?: boolean;
+  /** Custom class name */
+  className?: string;
+  /** Click handler */
+  onClick?: () => void;
+  /** Whether the logo is clickable */
+  clickable?: boolean;
+  /** Loading state */
+  loading?: boolean;
+  /** Custom href for link */
+  href?: string;
+  /** Target for link */
+  target?: string;
+  /** Accessibility label */
+  ariaLabel?: string;
+}
+
+const LOGO_ANIMATIONS = {
+  glow: {
+    initial: { textShadow: '0 0 5px #d4af37' },
+    animate: {
+      textShadow: [
+        '0 0 5px #d4af37',
+        '0 0 20px #d4af37, 0 0 30px #d4af37',
+        '0 0 5px #d4af37'
+      ],
+    },
+    transition: { duration: 2, repeat: Infinity, repeatType: 'reverse' as const }
+  },
+  pulse: {
+    initial: { scale: 1, opacity: 1 },
+    animate: { 
+      scale: [1, 1.05, 1],
+      opacity: [1, 0.8, 1]
+    },
+    transition: { duration: 2, repeat: Infinity }
+  },
+  float: {
+    initial: { y: 0 },
+    animate: { y: [-10, 0, -10] },
+    transition: { duration: 3, repeat: Infinity, ease: 'easeInOut' }
+  },
+  luxury: {
+    initial: { 
+      filter: 'brightness(1) saturate(1)',
+      scale: 1
+    },
+    animate: {
+      filter: ['brightness(1) saturate(1)', 'brightness(1.2) saturate(1.3)', 'brightness(1) saturate(1)'],
+      scale: [1, 1.02, 1]
+    },
+    transition: { duration: 3, repeat: Infinity, ease: 'easeInOut' }
+  },
+  entrance: {
+    initial: { 
+      opacity: 0,
+      scale: 0.3,
+      rotate: -180
+    },
+    animate: {
+      opacity: 1,
+      scale: 1,
+      rotate: 0
+    },
+    transition: { 
+      duration: 1,
+      ease: 'easeOut',
+      opacity: { delay: 0.2 }
+    }
+  }
+};
+
+const SIZE_CONFIGS = {
+  sm: {
+    symbol: 'text-xl',
+    text: 'text-sm',
+    container: 'gap-1',
+    height: 'h-8'
+  },
+  md: {
+    symbol: 'text-3xl',
+    text: 'text-base',
+    container: 'gap-2',
+    height: 'h-12'
+  },
+  lg: {
+    symbol: 'text-5xl',
+    text: 'text-xl',
+    container: 'gap-3',
+    height: 'h-16'
+  },
+  xl: {
+    symbol: 'text-6xl md:text-7xl',
+    text: 'text-2xl md:text-3xl',
+    container: 'gap-4',
+    height: 'h-20 md:h-24'
+  }
+};
+
+const THEME_CONFIGS = {
+  light: {
+    symbol: 'text-alpha-gold',
+    text: 'text-alpha-black',
+    glow: 'drop-shadow-lg'
+  },
+  dark: {
+    symbol: 'text-alpha-gold',
+    text: 'text-alpha-ivory',
+    glow: 'drop-shadow-lg'
+  },
+  gold: {
+    symbol: 'text-alpha-black',
+    text: 'text-alpha-black',
+    glow: 'drop-shadow-md'
+  }
+};
+
+/**
+ * Alpha Symbol Component
+ */
+const AlphaSymbol: React.FC<{
+  size: AlphaSize;
+  theme: AlphaTheme;
+  animation?: AlphaLogoAnimation;
+  className?: string;
+}> = ({ size, theme, animation, className = '' }) => {
+  const sizeConfig = SIZE_CONFIGS[size];
+  const themeConfig = THEME_CONFIGS[theme];
+  
+  const animationProps = animation ? LOGO_ANIMATIONS[animation] : {};
+  
+  return (
+    <motion.span
+      className={`
+        font-bold select-none
+        ${sizeConfig.symbol}
+        ${themeConfig.symbol}
+        ${themeConfig.glow}
+        ${className}
+      `}
+      {...animationProps}
+      style={{
+        fontFamily: 'Georgia, serif',
+        fontFeatureSettings: '"liga" 1',
+      }}
+    >
+      Α
+    </motion.span>
+  );
+};
+
+/**
+ * Store Text Component
+ */
+const StoreText: React.FC<{
+  size: AlphaSize;
+  theme: AlphaTheme;
+  animation?: AlphaLogoAnimation;
+  className?: string;
+}> = ({ size, theme, animation, className = '' }) => {
+  const sizeConfig = SIZE_CONFIGS[size];
+  const themeConfig = THEME_CONFIGS[theme];
+  const direction = getCurrentDirection();
+  
+  const animationProps = animation ? {
+    ...LOGO_ANIMATIONS[animation],
+    transition: {
+      ...LOGO_ANIMATIONS[animation].transition,
+      delay: 0.2
+    }
+  } : {};
+  
+  return (
+    <motion.span
+      className={`
+        font-alpha-persian font-bold select-none
+        ${sizeConfig.text}
+        ${themeConfig.text}
+        ${className}
+      `}
+      {...animationProps}
+      dir={direction}
+    >
+      Store
+    </motion.span>
+  );
+};
+
+/**
+ * Loading Spinner Component
+ */
+const LoadingSpinner: React.FC<{ size: AlphaSize }> = ({ size }) => {
+  const sizeClass = size === 'sm' ? 'w-4 h-4' : size === 'lg' ? 'w-8 h-8' : size === 'xl' ? 'w-10 h-10' : 'w-6 h-6';
+  
+  return (
+    <motion.div
+      className={`${sizeClass} border-2 border-alpha-gold-200 border-t-alpha-gold rounded-full`}
+      animate={{ rotate: 360 }}
+      transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+    />
+  );
+};
+
+/**
+ * Main AlphaStoreLogo Component
+ */
+export const AlphaStoreLogo: React.FC<AlphaStoreLogoProps> = ({
+  variation = 'horizontal',
+  size = 'md',
+  theme = 'light',
+  animation,
+  showText = true,
+  className = '',
+  onClick,
+  clickable = false,
+  loading = false,
+  href,
+  target,
+  ariaLabel = 'Α Store Logo'
+}) => {
+  const [mounted, setMounted] = useState(false);
+  const sizeConfig = SIZE_CONFIGS[size];
+  
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  
+  // Generate layout classes based on variation
+  const getVariationClasses = () => {
+    switch (variation) {
+      case 'icon':
+        return 'flex items-center justify-center';
+      case 'horizontal':
+        return `flex items-center justify-center ${sizeConfig.container}`;
+      case 'stacked':
+        return 'flex flex-col items-center justify-center gap-1';
+      case 'minimal':
+        return 'flex items-center justify-center';
+      default:
+        return `flex items-center justify-center ${sizeConfig.container}`;
+    }
+  };
+  
+  // Determine if text should be shown based on variation
+  const shouldShowText = showText && !['icon', 'minimal'].includes(variation);
+  
+  // Create the logo content
+  const logoContent = (
+    <div
+      className={`
+        ${getVariationClasses()}
+        ${sizeConfig.height}
+        transition-all duration-300
+        ${clickable || href ? 'cursor-pointer hover:scale-105' : ''}
+        ${className}
+      `}
+      onClick={clickable ? onClick : undefined}
+      role={clickable || href ? 'button' : undefined}
+      tabIndex={clickable || href ? 0 : undefined}
+      aria-label={ariaLabel}
+      onKeyDown={(e) => {
+        if ((clickable || href) && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          onClick?.();
+        }
+      }}
+    >
+      <AnimatePresence mode="wait">
+        {loading ? (
+          <motion.div
+            key="loading"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <LoadingSpinner size={size} />
+          </motion.div>
+        ) : (
+          <motion.div
+            key="logo"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className={getVariationClasses()}
+          >
+            <AlphaSymbol
+              size={size}
+              theme={theme}
+              animation={animation}
+            />
+            {shouldShowText && (
+              <StoreText
+                size={size}
+                theme={theme}
+                animation={animation}
+              />
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+  
+  // Wrap in link if href is provided
+  if (href && mounted) {
+    return (
+      <a
+        href={href}
+        target={target}
+        className="inline-block"
+        aria-label={ariaLabel}
+      >
+        {logoContent}
+      </a>
+    );
+  }
+  
+  return logoContent;
+};
+
+/**
+ * Preset Logo Variations
+ */
+export const AlphaStoreLogoPresets = {
+  Hero: (props: Partial<AlphaStoreLogoProps>) => (
+    <AlphaStoreLogo
+      variation="horizontal"
+      size="xl"
+      theme="light"
+      animation="luxury"
+      showText={true}
+      {...props}
+    />
+  ),
+  
+  Header: (props: Partial<AlphaStoreLogoProps>) => (
+    <AlphaStoreLogo
+      variation="horizontal"
+      size="md"
+      theme="light"
+      showText={true}
+      clickable={true}
+      {...props}
+    />
+  ),
+  
+  Footer: (props: Partial<AlphaStoreLogoProps>) => (
+    <AlphaStoreLogo
+      variation="horizontal"
+      size="sm"
+      theme="dark"
+      showText={true}
+      {...props}
+    />
+  ),
+  
+  Loading: (props: Partial<AlphaStoreLogoProps>) => (
+    <AlphaStoreLogo
+      variation="icon"
+      size="lg"
+      theme="light"
+      animation="pulse"
+      loading={true}
+      showText={false}
+      {...props}
+    />
+  ),
+  
+  Minimal: (props: Partial<AlphaStoreLogoProps>) => (
+    <AlphaStoreLogo
+      variation="minimal"
+      size="sm"
+      theme="gold"
+      showText={false}
+      {...props}
+    />
+  ),
+  
+  Stacked: (props: Partial<AlphaStoreLogoProps>) => (
+    <AlphaStoreLogo
+      variation="stacked"
+      size="lg"
+      theme="light"
+      animation="float"
+      showText={true}
+      {...props}
+    />
+  )
+};
+
+export default AlphaStoreLogo;

@@ -1,0 +1,253 @@
+/**
+ * Next.js Document Component
+ * Customizes the HTML document structure for Α Store
+ */
+
+import { Html, Head, Main, NextScript } from 'next/document';
+import { ALPHA_BRAND_CONFIG } from '@/utils/brand';
+
+export default function Document() {
+  return (
+    <Html 
+      lang="fa" 
+      dir="rtl" 
+      className="scroll-smooth"
+      data-theme="light"
+      data-direction="rtl"
+    >
+      <Head>
+        {/* Critical CSS for font loading */}
+        <style jsx>{`
+          /* Font Face Declarations - Critical Path */
+          @font-face {
+            font-family: 'IranSans';
+            src: url('/fonts/IranSans-Regular.woff2') format('woff2');
+            font-weight: 400;
+            font-style: normal;
+            font-display: swap;
+          }
+          
+          @font-face {
+            font-family: 'IranSans';
+            src: url('/fonts/IranSans-Bold.woff2') format('woff2');
+            font-weight: 700;
+            font-style: normal;
+            font-display: swap;
+          }
+          
+          @font-face {
+            font-family: 'Vazir';
+            src: url('/fonts/Vazir-Regular.woff2') format('woff2');
+            font-weight: 400;
+            font-style: normal;
+            font-display: swap;
+          }
+          
+          @font-face {
+            font-family: 'Vazir';
+            src: url('/fonts/Vazir-Bold.woff2') format('woff2');
+            font-weight: 700;
+            font-style: normal;
+            font-display: swap;
+          }
+          
+          /* Critical CSS Variables */
+          :root {
+            --alpha-black: #1a1a1a;
+            --alpha-gold: #d4af37;
+            --alpha-ivory: #f9f6f0;
+            --alpha-emerald: #50c878;
+            --font-iranSans: 'IranSans', Tahoma, Arial, sans-serif;
+            --font-vazir: 'Vazir', Arial, Helvetica, sans-serif;
+          }
+          
+          /* Prevent flash of unstyled content */
+          body {
+            font-family: var(--font-iranSans);
+            background-color: var(--alpha-ivory);
+            color: var(--alpha-black);
+            direction: rtl;
+            text-align: right;
+          }
+          
+          /* Loading spinner for initial page load */
+          .alpha-initial-loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--alpha-ivory);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+          }
+          
+          .alpha-initial-loading .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--alpha-gold);
+            border-top: 3px solid transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+          }
+          
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+          
+          /* Hide loading when app is ready */
+          .alpha-app-ready .alpha-initial-loading {
+            display: none;
+          }
+        `}</style>
+        
+        {/* Critical Resource Hints */}
+        <link rel="preconnect" href={`https://${ALPHA_BRAND_CONFIG.primaryDomain}`} />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        
+        {/* Critical Scripts */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              // Prevent flash of wrong theme/direction
+              (function() {
+                try {
+                  var theme = localStorage.getItem('alpha-store-theme') || 'light';
+                  var direction = localStorage.getItem('alpha-store-direction') || 'rtl';
+                  
+                  document.documentElement.setAttribute('data-theme', theme);
+                  document.documentElement.setAttribute('data-direction', direction);
+                  document.documentElement.dir = direction;
+                  
+                  if (direction === 'ltr') {
+                    document.documentElement.lang = 'en';
+                  }
+                } catch (e) {
+                  console.warn('Failed to apply stored theme/direction:', e);
+                }
+              })();
+            `
+          }}
+        />
+      </Head>
+      
+      <body className="antialiased">
+        {/* Initial Loading Screen */}
+        <div className="alpha-initial-loading">
+          <div className="spinner"></div>
+        </div>
+        
+        {/* No JavaScript Fallback */}
+        <noscript>
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            backgroundColor: '#f9f6f0',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexDirection: 'column',
+            fontFamily: 'IranSans, Tahoma, Arial, sans-serif',
+            textAlign: 'center',
+            color: '#1a1a1a',
+            zIndex: 10000
+          }}>
+            <h1 style={{ fontSize: '2rem', marginBottom: '1rem', color: '#d4af37' }}>
+              Α Store
+            </h1>
+            <p style={{ fontSize: '1.2rem', marginBottom: '2rem' }}>
+              برای استفاده از این وبسایت، لطفاً جاوااسکریپت را فعال کنید.
+            </p>
+            <p style={{ fontSize: '1rem', color: '#6a6a6a' }}>
+              Please enable JavaScript to use this website.
+            </p>
+          </div>
+        </noscript>
+        
+        {/* Main Application */}
+        <Main />
+        
+        {/* Next.js Scripts */}
+        <NextScript />
+        
+        {/* App Ready Script */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              // Mark app as ready when DOM is loaded
+              document.addEventListener('DOMContentLoaded', function() {
+                setTimeout(function() {
+                  document.body.classList.add('alpha-app-ready');
+                }, 100);
+              });
+              
+              // Update dev tools in development
+              if ('${process.env.NODE_ENV}' === 'development') {
+                function updateDevTools() {
+                  var themeElement = document.getElementById('current-theme');
+                  var directionElement = document.getElementById('current-direction');
+                  
+                  if (themeElement) {
+                    themeElement.textContent = document.documentElement.getAttribute('data-theme') || 'unknown';
+                  }
+                  
+                  if (directionElement) {
+                    directionElement.textContent = document.documentElement.dir || 'unknown';
+                  }
+                }
+                
+                // Update immediately and on changes
+                updateDevTools();
+                
+                var observer = new MutationObserver(updateDevTools);
+                observer.observe(document.documentElement, {
+                  attributes: true,
+                  attributeFilter: ['data-theme', 'dir']
+                });
+              }
+            `
+          }}
+        />
+        
+        {/* Service Worker Registration */}
+        {process.env.NODE_ENV === 'production' && (
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
+                if ('serviceWorker' in navigator) {
+                  window.addEventListener('load', function() {
+                    navigator.serviceWorker.register('/sw.js')
+                      .then(function(registration) {
+                        console.log('SW registered: ', registration);
+                      })
+                      .catch(function(registrationError) {
+                        console.log('SW registration failed: ', registrationError);
+                      });
+                  });
+                }
+              `
+            }}
+          />
+        )}
+        
+        {/* Analytics Placeholder */}
+        {process.env.NODE_ENV === 'production' && (
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
+                // Add your analytics code here
+                console.log('${ALPHA_BRAND_CONFIG.siteName} loaded successfully');
+              `
+            }}
+          />
+        )}
+      </body>
+    </Html>
+  );
+}

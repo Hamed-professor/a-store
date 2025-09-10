@@ -1,0 +1,3136 @@
+# Î± Store - Part 2B: Product Pages & Navigation
+
+This part creates the complete product browsing experience for the luxury Persian e-commerce platform.
+
+## Project Structure
+
+```
+alpha-store/
+├── 📁 src/
+│   ├── 📁 components/
+│   │   ├── 📁 product/
+│   │   │   ├── 📄 ProductFilters.tsx
+│   │   │   ├── 📄 ProductSearch.tsx
+│   │   │   └── 📄 ProductDetail.tsx
+│   │   └── 📁 navigation/
+│   │       ├── 📄 Breadcrumbs.tsx
+│   │       └── 📄 CategoryMenu.tsx
+│   ├── 📁 hooks/
+│   │   ├── 📄 useSearch.ts
+│   │   └── 📄 useFilters.ts
+│   └── 📁 utils/
+│       ├── 📄 search.ts
+│       └── 📄 seo.ts
+├── 📁 pages/
+│   ├── 📁 products/
+│   │   ├── 📄 index.tsx
+│   │   └── 📄 [slug].tsx
+│   ├── 📁 categories/
+│   │   └── 📄 [category].tsx
+│   └── 📄 search.tsx
+```
+
+## Core Components
+
+### 1. Product Filters Component
+
+```typescript
+// src/components/product/ProductFilters.tsx
+import { useState, useEffect } from 'react';
+import { ChevronDown, X, Filter } from 'lucide-react';
+
+interface FilterOptions {
+  categories: string[];
+  priceRange: [number, number];
+  brands: string[];
+  colors: string[];
+  sizes: string[];
+  ratings: number[];
+}
+
+interface ActiveFilters {
+  category?: string;
+  priceMin?: number;
+  priceMax?: number;
+  brand?: string;
+  color?: string;
+  size?: string;
+  rating?: number;
+}
+
+interface ProductFiltersProps {
+  options: FilterOptions;
+  activeFilters: ActiveFilters;
+  onFiltersChange: (filters: ActiveFilters) => void;
+  isOpen?: boolean;
+  onToggle?: () => void;
+}
+
+const ProductFilters: React.FC<ProductFiltersProps> = ({
+  options,
+  activeFilters,
+  onFiltersChange,
+  isOpen = true,
+  onToggle
+}) => {
+  const [localFilters, setLocalFilters] = useState<ActiveFilters>(activeFilters);
+  const [expandedSections, setExpandedSections] = useState({
+    category: true,
+    price: true,
+    brand: false,
+    color: false,
+    size: false,
+    rating: false
+  });
+
+  const formatPrice = (price: number): string => {
+    return new Intl.NumberFormat('fa-IR').format(price) + ' ریال';
+  };
+
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
+
+  const updateFilter = (key: keyof ActiveFilters, value: any) => {
+    const newFilters = { ...localFilters, [key]: value };
+    setLocalFilters(newFilters);
+    onFiltersChange(newFilters);
+  };
+
+  const clearFilter = (key: keyof ActiveFilters) => {
+    const newFilters = { ...localFilters };
+    delete newFilters[key];
+    setLocalFilters(newFilters);
+    onFiltersChange(newFilters);
+  };
+
+  const clearAllFilters = () => {
+    setLocalFilters({});
+    onFiltersChange({});
+  };
+
+  const activeFilterCount = Object.keys(localFilters).length;
+
+  const FilterSection = ({ title, isExpanded, onToggle, children }) => (
+    <div className="border-b border-gray-100 last:border-b-0">
+      <button
+        onClick={onToggle}
+        className="w-full flex justify-between items-center py-4 text-right hover:bg-gray-50 transition-colors"
+      >
+        <ChevronDown className={`w-5 h-5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+        <span className="font-medium text-gray-900">{title}</span>
+      </button>
+      {isExpanded && (
+        <div className="pb-4 pr-6">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className={`bg-white rounded-lg shadow-sm border ${!isOpen ? 'hidden lg:block' : ''}`}>
+      {/* Header */}
+      <div className="p-4 border-b border-gray-100 flex justify-between items-center">
+        <div className="flex items-center gap-2">
+          {activeFilterCount > 0 && (
+            <button
+              onClick={clearAllFilters}
+              className="text-red-600 text-sm hover:text-red-700"
+            >
+              پاک کردن همه
+            </button>
+          )}
+          {activeFilterCount > 0 && (
+            <span className="bg-gold text-white text-xs px-2 py-1 rounded-full">
+              {activeFilterCount}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <Filter className="w-5 h-5" />
+          <h3 className="font-bold text-lg">فیلترها</h3>
+        </div>
+      </div>
+
+      {/* Active Filters */}
+      {activeFilterCount > 0 && (
+        <div className="p-4 border-b border-gray-100">
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(localFilters).map(([key, value]) => (
+              <div
+                key={key}
+                className="flex items-center gap-1 bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm"
+              >
+                <button
+                  onClick={() => clearFilter(key as keyof ActiveFilters)}
+                  className="hover:text-red-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+                <span>
+                  {key === 'priceMin' || key === 'priceMax' 
+                    ? formatPrice(value as number)
+                    : value
+                  }
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Filter Sections */}
+      <div className="divide-y divide-gray-100">
+        {/* Category Filter */}
+        <FilterSection
+          title="دسته‌بندی"
+          isExpanded={expandedSections.category}
+          onToggle={() => toggleSection('category')}
+        >
+          <div className="space-y-2">
+            {options.categories.map(category => (
+              <label key={category} className="flex items-center justify-end gap-3 cursor-pointer">
+                <span className="text-gray-700">{category}</span>
+                <input
+                  type="radio"
+                  name="category"
+                  value={category}
+                  checked={localFilters.category === category}
+                  onChange={(e) => updateFilter('category', e.target.value)}
+                  className="w-4 h-4 text-gold border-gray-300 focus:ring-gold"
+                />
+              </label>
+            ))}
+          </div>
+        </FilterSection>
+
+        {/* Price Filter */}
+        <FilterSection
+          title="قیمت"
+          isExpanded={expandedSections.price}
+          onToggle={() => toggleSection('price')}
+        >
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">حداکثر</label>
+                <input
+                  type="number"
+                  placeholder="0"
+                  value={localFilters.priceMax || ''}
+                  onChange={(e) => updateFilter('priceMax', e.target.value ? parseInt(e.target.value) : undefined)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-right focus:ring-2 focus:ring-gold focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">حداقل</label>
+                <input
+                  type="number"
+                  placeholder="0"
+                  value={localFilters.priceMin || ''}
+                  onChange={(e) => updateFilter('priceMin', e.target.value ? parseInt(e.target.value) : undefined)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-right focus:ring-2 focus:ring-gold focus:border-transparent"
+                />
+              </div>
+            </div>
+            
+            {/* Quick price filters */}
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              {[
+                { label: 'تا ۱ میلیون', max: 1000000 },
+                { label: 'تا ۵ میلیون', max: 5000000 },
+                { label: 'تا ۱۰ میلیون', max: 10000000 },
+                { label: 'بالای ۱۰ میلیون', min: 10000000 }
+              ].map(price => (
+                <button
+                  key={price.label}
+                  onClick={() => {
+                    updateFilter('priceMin', price.min || undefined);
+                    updateFilter('priceMax', price.max || undefined);
+                  }}
+                  className="px-3 py-2 text-center border border-gray-200 rounded-md hover:border-gold hover:text-gold transition-colors"
+                >
+                  {price.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </FilterSection>
+
+        {/* Brand Filter */}
+        <FilterSection
+          title="برند"
+          isExpanded={expandedSections.brand}
+          onToggle={() => toggleSection('brand')}
+        >
+          <div className="space-y-2">
+            {options.brands.map(brand => (
+              <label key={brand} className="flex items-center justify-end gap-3 cursor-pointer">
+                <span className="text-gray-700">{brand}</span>
+                <input
+                  type="checkbox"
+                  checked={localFilters.brand === brand}
+                  onChange={(e) => updateFilter('brand', e.target.checked ? brand : undefined)}
+                  className="w-4 h-4 text-gold border-gray-300 rounded focus:ring-gold"
+                />
+              </label>
+            ))}
+          </div>
+        </FilterSection>
+
+        {/* Rating Filter */}
+        <FilterSection
+          title="امتیاز"
+          isExpanded={expandedSections.rating}
+          onToggle={() => toggleSection('rating')}
+        >
+          <div className="space-y-2">
+            {[5, 4, 3, 2, 1].map(rating => (
+              <label key={rating} className="flex items-center justify-end gap-3 cursor-pointer">
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-700">و بالاتر</span>
+                  <div className="flex">
+                    {[...Array(5)].map((_, i) => (
+                      <span
+                        key={i}
+                        className={`text-lg ${i < rating ? 'text-yellow-400' : 'text-gray-300'}`}
+                      >
+                        ★
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <input
+                  type="radio"
+                  name="rating"
+                  value={rating}
+                  checked={localFilters.rating === rating}
+                  onChange={(e) => updateFilter('rating', parseInt(e.target.value))}
+                  className="w-4 h-4 text-gold border-gray-300 focus:ring-gold"
+                />
+              </label>
+            ))}
+          </div>
+        </FilterSection>
+      </div>
+    </div>
+  );
+};
+
+export default ProductFilters;
+```
+
+### 2. Product Search Component
+
+```typescript
+// src/components/product/ProductSearch.tsx
+import { useState, useEffect, useRef } from 'react';
+import { Search, X, Clock, TrendingUp } from 'lucide-react';
+
+interface SearchSuggestion {
+  id: string;
+  text: string;
+  type: 'product' | 'category' | 'brand';
+  count?: number;
+}
+
+interface ProductSearchProps {
+  placeholder?: string;
+  onSearch: (query: string) => void;
+  suggestions?: SearchSuggestion[];
+  recentSearches?: string[];
+  popularSearches?: string[];
+  isLoading?: boolean;
+}
+
+const ProductSearch: React.FC<ProductSearchProps> = ({
+  placeholder = "جستجوی محصولات...",
+  onSearch,
+  suggestions = [],
+  recentSearches = [],
+  popularSearches = [],
+  isLoading = false
+}) => {
+  const [query, setQuery] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
+
+  const allSuggestions = [
+    ...suggestions.map(s => ({ ...s, category: 'suggestion' })),
+    ...recentSearches.map(s => ({ 
+      id: s, 
+      text: s, 
+      type: 'recent' as const, 
+      category: 'recent' 
+    })),
+    ...popularSearches.map(s => ({ 
+      id: s, 
+      text: s, 
+      type: 'popular' as const, 
+      category: 'popular' 
+    }))
+  ];
+
+  const filteredSuggestions = query.length > 0 
+    ? suggestions.filter(s => 
+        s.text.toLowerCase().includes(query.toLowerCase()) ||
+        s.text.includes(query)
+      )
+    : allSuggestions;
+
+  const handleSearch = (searchQuery: string) => {
+    if (searchQuery.trim()) {
+      onSearch(searchQuery.trim());
+      setQuery(searchQuery);
+      setIsOpen(false);
+      
+      // Add to recent searches (in real app, this would be persisted)
+      if (!recentSearches.includes(searchQuery)) {
+        recentSearches.unshift(searchQuery);
+      }
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex(prev => 
+        prev < filteredSuggestions.length - 1 ? prev + 1 : prev
+      );
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex(prev => prev > 0 ? prev - 1 : prev);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (highlightedIndex >= 0) {
+        handleSearch(filteredSuggestions[highlightedIndex].text);
+      } else {
+        handleSearch(query);
+      }
+    } else if (e.key === 'Escape') {
+      setIsOpen(false);
+      inputRef.current?.blur();
+    }
+  };
+
+  const clearQuery = () => {
+    setQuery('');
+    inputRef.current?.focus();
+  };
+
+  useEffect(() => {
+    if (highlightedIndex >= 0 && suggestionsRef.current) {
+      const highlighted = suggestionsRef.current.children[highlightedIndex] as HTMLElement;
+      if (highlighted) {
+        highlighted.scrollIntoView({ block: 'nearest' });
+      }
+    }
+  }, [highlightedIndex]);
+
+  const getSuggestionIcon = (type: string) => {
+    switch (type) {
+      case 'recent':
+        return <Clock className="w-4 h-4 text-gray-400" />;
+      case 'popular':
+        return <TrendingUp className="w-4 h-4 text-gold" />;
+      default:
+        return <Search className="w-4 h-4 text-gray-400" />;
+    }
+  };
+
+  return (
+    <div className="relative w-full max-w-2xl mx-auto">
+      {/* Search Input */}
+      <div className="relative">
+        <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
+          <Search className="w-5 h-5 text-gray-400" />
+        </div>
+        
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onFocus={() => setIsOpen(true)}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          className="w-full h-12 pr-12 pl-12 text-right bg-white border-2 border-gray-200 rounded-full focus:border-gold focus:ring-4 focus:ring-gold/20 transition-all text-lg"
+          dir="rtl"
+        />
+
+        {query && (
+          <button
+            onClick={clearQuery}
+            className="absolute left-4 top-1/2 transform -translate-y-1/2 hover:text-red-600 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
+
+        {isLoading && (
+          <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
+            <div className="w-5 h-5 border-2 border-gold border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        )}
+      </div>
+
+      {/* Search Suggestions Dropdown */}
+      {isOpen && (
+        <>
+          <div 
+            className="fixed inset-0 z-10" 
+            onClick={() => setIsOpen(false)}
+          />
+          
+          <div 
+            ref={suggestionsRef}
+            className="absolute top-full mt-2 w-full bg-white border border-gray-200 rounded-lg shadow-xl z-20 max-h-96 overflow-y-auto"
+          >
+            {filteredSuggestions.length === 0 && query ? (
+              <div className="p-4 text-center text-gray-500">
+                نتیجه‌ای یافت نشد
+              </div>
+            ) : (
+              <div className="py-2">
+                {/* Recent Searches */}
+                {query.length === 0 && recentSearches.length > 0 && (
+                  <div className="px-4 py-2">
+                    <h4 className="text-sm font-medium text-gray-500 mb-2 text-right">
+                      جستجوهای اخیر
+                    </h4>
+                    {recentSearches.slice(0, 3).map((search, index) => (
+                      <button
+                        key={`recent-${search}`}
+                        onClick={() => handleSearch(search)}
+                        className={`w-full px-4 py-2 text-right hover:bg-gray-50 flex items-center justify-end gap-3 ${
+                          highlightedIndex === index ? 'bg-gray-50' : ''
+                        }`}
+                      >
+                        <span className="text-gray-700">{search}</span>
+                        <Clock className="w-4 h-4 text-gray-400" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Popular Searches */}
+                {query.length === 0 && popularSearches.length > 0 && (
+                  <div className="px-4 py-2 border-t border-gray-100">
+                    <h4 className="text-sm font-medium text-gray-500 mb-2 text-right">
+                      جستجوهای پرطرفدار
+                    </h4>
+                    {popularSearches.slice(0, 5).map((search, index) => (
+                      <button
+                        key={`popular-${search}`}
+                        onClick={() => handleSearch(search)}
+                        className={`w-full px-4 py-2 text-right hover:bg-gray-50 flex items-center justify-end gap-3 ${
+                          highlightedIndex === recentSearches.length + index ? 'bg-gray-50' : ''
+                        }`}
+                      >
+                        <span className="text-gray-700">{search}</span>
+                        <TrendingUp className="w-4 h-4 text-gold" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Suggestions */}
+                {filteredSuggestions.filter(s => s.category === 'suggestion').map((suggestion, index) => (
+                  <button
+                    key={suggestion.id}
+                    onClick={() => handleSearch(suggestion.text)}
+                    className={`w-full px-4 py-2 text-right hover:bg-gray-50 flex items-center justify-between ${
+                      highlightedIndex === index ? 'bg-gray-50' : ''
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      {suggestion.count && (
+                        <span className="text-xs text-gray-400">
+                          ({new Intl.NumberFormat('fa-IR').format(suggestion.count)})
+                        </span>
+                      )}
+                      <span className="text-xs text-gray-400 capitalize">
+                        {suggestion.type === 'product' ? 'محصول' : 
+                         suggestion.type === 'category' ? 'دسته‌بندی' : 'برند'}
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
+                      <span className="text-gray-700">{suggestion.text}</span>
+                      {getSuggestionIcon(suggestion.type)}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+export default ProductSearch;
+```
+
+### 3. Product Detail Component
+
+```typescript
+// src/components/product/ProductDetail.tsx
+import { useState, useEffect } from 'react';
+import { 
+  Heart, 
+  Share2, 
+  ShoppingCart, 
+  Plus, 
+  Minus, 
+  Star,
+  Truck,
+  Shield,
+  RotateCcw,
+  Eye,
+  ChevronLeft,
+  ChevronRight,
+  X
+} from 'lucide-react';
+
+interface ProductImage {
+  id: string;
+  url: string;
+  alt: string;
+  isPrimary?: boolean;
+}
+
+interface ProductVariant {
+  id: string;
+  name: string;
+  value: string;
+  available: boolean;
+  price?: number;
+}
+
+interface ProductReview {
+  id: string;
+  user: string;
+  rating: number;
+  comment: string;
+  date: string;
+  verified: boolean;
+}
+
+interface Product {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  price: number;
+  originalPrice?: number;
+  currency: string;
+  images: ProductImage[];
+  variants: {
+    colors?: ProductVariant[];
+    sizes?: ProductVariant[];
+    [key: string]: ProductVariant[] | undefined;
+  };
+  specifications: { [key: string]: string };
+  reviews: ProductReview[];
+  rating: number;
+  reviewCount: number;
+  inStock: boolean;
+  stockCount?: number;
+  brand: string;
+  category: string;
+  tags: string[];
+  shipping: {
+    freeShipping: boolean;
+    estimatedDays: number;
+    locations: string[];
+  };
+  warranty: string;
+  returnPolicy: string;
+}
+
+interface ProductDetailProps {
+  product: Product;
+  relatedProducts?: Product[];
+  onAddToCart: (productId: string, quantity: number, variants: any) => void;
+  onToggleWishlist: (productId: string) => void;
+  isInWishlist?: boolean;
+}
+
+const ProductDetail: React.FC<ProductDetailProps> = ({
+  product,
+  relatedProducts = [],
+  onAddToCart,
+  onToggleWishlist,
+  isInWishlist = false
+}) => {
+  const [selectedImage, setSelectedImage] = useState(0);
+  const [selectedVariants, setSelectedVariants] = useState<{[key: string]: string}>({});
+  const [quantity, setQuantity] = useState(1);
+  const [showLightbox, setShowLightbox] = useState(false);
+  const [activeTab, setActiveTab] = useState<'description' | 'specs' | 'reviews'>('description');
+
+  const formatPrice = (price: number): string => {
+    return new Intl.NumberFormat('fa-IR').format(price) + ' ریال';
+  };
+
+  const formatPriceInToman = (price: number): string => {
+    return new Intl.NumberFormat('fa-IR').format(price / 10) + ' تومان';
+  };
+
+  const calculateDiscount = (): number => {
+    if (product.originalPrice && product.price < product.originalPrice) {
+      return Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100);
+    }
+    return 0;
+  };
+
+  const handleVariantChange = (type: string, value: string) => {
+    setSelectedVariants(prev => ({
+      ...prev,
+      [type]: value
+    }));
+  };
+
+  const handleAddToCart = () => {
+    if (product.inStock) {
+      onAddToCart(product.id, quantity, selectedVariants);
+    }
+  };
+
+  const canAddToCart = (): boolean => {
+    if (!product.inStock) return false;
+    
+    // Check if required variants are selected
+    const requiredVariants = Object.keys(product.variants);
+    for (const variantType of requiredVariants) {
+      if (product.variants[variantType]?.length && !selectedVariants[variantType]) {
+        return false;
+      }
+    }
+    
+    return true;
+  };
+
+  const ImageGallery = () => (
+    <div className="space-y-4">
+      {/* Main Image */}
+      <div className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden group">
+        <img
+          src={product.images[selectedImage]?.url}
+          alt={product.images[selectedImage]?.alt}
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+        />
+        
+        {/* Zoom Button */}
+        <button
+          onClick={() => setShowLightbox(true)}
+          className="absolute top-4 left-4 bg-black/50 text-white p-2 rounded-full hover:bg-black/70 transition-colors"
+        >
+          <Eye className="w-5 h-5" />
+        </button>
+
+        {/* Discount Badge */}
+        {calculateDiscount() > 0 && (
+          <div className="absolute top-4 right-4 bg-red-600 text-white px-3 py-1 rounded-full text-sm font-bold">
+            {calculateDiscount()}% تخفیف
+          </div>
+        )}
+
+        {/* Navigation Arrows */}
+        {product.images.length > 1 && (
+          <>
+            <button
+              onClick={() => setSelectedImage(prev => 
+                prev > 0 ? prev - 1 : product.images.length - 1
+              )}
+              className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 text-white p-2 rounded-full hover:bg-black/70 transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setSelectedImage(prev => 
+                prev < product.images.length - 1 ? prev + 1 : 0
+              )}
+              className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 text-white p-2 rounded-full hover:bg-black/70 transition-colors"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Thumbnail Images */}
+      {product.images.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto pb-2">
+          {product.images.map((image, index) => (
+            <button
+              key={image.id}
+              onClick={() => setSelectedImage(index)}
+              className={`flex-shrink-0 w-16 h-16 rounded-md overflow-hidden border-2 transition-colors ${
+                selectedImage === index 
+                  ? 'border-gold' 
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <img
+                src={image.url}
+                alt={image.alt}
+                className="w-full h-full object-cover"
+              />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const ProductInfo = () => (
+    <div className="space-y-6">
+      {/* Title and Brand */}
+      <div className="text-right">
+        <p className="text-gold font-medium mb-2">{product.brand}</p>
+        <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 leading-tight">
+          {product.name}
+        </h1>
+      </div>
+
+      {/* Rating */}
+      <div className="flex items-center justify-end gap-4">
+        <span className="text-gray-600">
+          ({new Intl.NumberFormat('fa-IR').format(product.reviewCount)} نظر)
+        </span>
+        <div className="flex items-center gap-2">
+          <span className="font-bold text-lg">
+            {product.rating.toFixed(1)}
+          </span>
+          <div className="flex">
+            {[...Array(5)].map((_, i) => (
+              <Star
+                key={i}
+                className={`w-5 h-5 ${
+                  i < Math.floor(product.rating) 
+                    ? 'text-yellow-400 fill-current'
+                    : 'text-gray-300'
+                }`}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Price */}
+      <div className="text-right">
+        <div className="flex items-center justify-end gap-4 mb-2">
+          <div className="text-right">
+            <div className="text-3xl font-bold text-gray-900">
+              {formatPrice(product.price)}
+            </div>
+            <div className="text-lg text-gray-600">
+              {formatPriceInToman(product.price)}
+            </div>
+          </div>
+          {product.originalPrice && product.originalPrice > product.price && (
+            <div className="text-gray-400 line-through">
+              {formatPrice(product.originalPrice)}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Variants */}
+      {Object.entries(product.variants).map(([type, variants]) => (
+        variants && variants.length > 0 && (
+          <div key={type} className="text-right">
+            <h3 className="font-medium text-gray-900 mb-3 capitalize">
+              {type === 'colors' ? 'رنگ' : 
+               type === 'sizes' ? 'سایز' : type}:
+              {selectedVariants[type] && (
+                <span className="font-normal text-gray-600 mr-2">
+                  {variants.find(v => v.id === selectedVariants[type])?.name}
+                </span>
+              )}
+            </h3>
+            <div className="flex flex-wrap gap-2 justify-end">
+              {variants.map(variant => (
+                <button
+                  key={variant.id}
+                  onClick={() => handleVariantChange(type, variant.id)}
+                  disabled={!variant.available}
+                  className={`px-4 py-2 rounded-md border transition-colors ${
+                    selectedVariants[type] === variant.id
+                      ? 'border-gold bg-gold text-white'
+                      : variant.available
+                      ? 'border-gray-300 hover:border-gray-400'
+                      : 'border-gray-200 text-gray-400 cursor-not-allowed'
+                  } ${
+                    type === 'colors' && variant.value.startsWith('#')
+                      ? 'w-12 h-12 rounded-full p-0 border-2'
+                      : ''
+                  }`}
+                  style={
+                    type === 'colors' && variant.value.startsWith('#')
+                      ? { backgroundColor: variant.value }
+                      : {}
+                  }
+                >
+                  {type === 'colors' && variant.value.startsWith('#') 
+                    ? '' 
+                    : variant.name
+                  }
+                </button>
+              ))}
+            </div>
+          </div>
+        )
+      ))}
+
+      {/* Quantity and Stock */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setQuantity(Math.max(1, quantity - 1))}
+            className="w-10 h-10 flex items-center justify-center border border-gray-300 rounded-md hover:border-gray-400 transition-colors"
+          >
+            <Minus className="w-4 h-4" />
+          </button>
+          <span className="text-xl font-medium min-w-[3rem] text-center">
+            {new Intl.NumberFormat('fa-IR').format(quantity)}
+          </span>
+          <button
+            onClick={() => setQuantity(quantity + 1)}
+            disabled={product.stockCount && quantity >= product.stockCount}
+            className="w-10 h-10 flex items-center justify-center border border-gray-300 rounded-md hover:border-gray-400 transition-colors disabled:opacity-50"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="text-right">
+          {product.inStock ? (
+            <div className="text-green-600">
+              <span>موجود در انبار</span>
+              {product.stockCount && (
+                <span className="text-gray-600 text-sm mr-2">
+                  ({new Intl.NumberFormat('fa-IR').format(product.stockCount)} عدد)
+                </span>
+              )}
+            </div>
+          ) : (
+            <div className="text-red-600">ناموجود</div>
+          )}
+        </div>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="space-y-3">
+        <button
+          onClick={handleAddToCart}
+          disabled={!canAddToCart()}
+          className="w-full bg-gold text-white py-4 rounded-lg font-bold text-lg hover:bg-gold/90 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+        >
+          <ShoppingCart className="w-6 h-6" />
+          {product.inStock ? 'افزودن به سبد خرید' : 'ناموجود'}
+        </button>
+
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => onToggleWishlist(product.id)}
+            className={`flex items-center justify-center gap-2 py-3 rounded-lg border transition-colors ${
+              isInWishlist
+                ? 'border-red-500 text-red-500 bg-red-50'
+                : 'border-gray-300 text-gray-700 hover:border-gray-400'
+            }`}
+          >
+            <Heart className={`w-5 h-5 ${isInWishlist ? 'fill-current' : ''}`} />
+            {isInWishlist ? 'حذف از علاقه‌مندی‌ها' : 'افزودن به علاقه‌مندی‌ها'}
+          </button>
+
+          <button className="flex items-center justify-center gap-2 py-3 rounded-lg border border-gray-300 text-gray-700 hover:border-gray-400 transition-colors">
+            <Share2 className="w-5 h-5" />
+            اشتراک‌گذاری
+          </button>
+        </div>
+      </div>
+
+      {/* Shipping & Services */}
+      <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+        <div className="flex items-center justify-end gap-3 text-green-600">
+          <span>ارسال رایگان برای خریدهای بالای ۵۰۰ هزار تومان</span>
+          <Truck className="w-5 h-5" />
+        </div>
+        
+        <div className="flex items-center justify-end gap-3 text-blue-600">
+          <span>گارانتی {product.warranty}</span>
+          <Shield className="w-5 h-5" />
+        </div>
+        
+        <div className="flex items-center justify-end gap-3 text-orange-600">
+          <span>امکان بازگشت تا ۷ روز</span>
+          <RotateCcw className="w-5 h-5" />
+        </div>
+      </div>
+    </div>
+  );
+
+  const ProductTabs = () => (
+    <div className="mt-12">
+      {/* Tab Headers */}
+      <div className="border-b border-gray-200">
+        <nav className="flex gap-8 justify-end">
+          {[
+            { key: 'description', label: 'توضیحات' },
+            { key: 'specs', label: 'مشخصات فنی' },
+            { key: 'reviews', label: 'نظرات کاربران' }
+          ].map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key as any)}
+              className={`py-4 px-2 border-b-2 font-medium transition-colors ${
+                activeTab === tab.key
+                  ? 'border-gold text-gold'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              {tab.label}
+              {tab.key === 'reviews' && (
+                <span className="mr-2 text-sm text-gray-500">
+                  ({new Intl.NumberFormat('fa-IR').format(product.reviewCount)})
+                </span>
+              )}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {/* Tab Content */}
+      <div className="py-6">
+        {activeTab === 'description' && (
+          <div className="text-right space-y-4">
+            <div className="prose prose-lg max-w-none text-right" dir="rtl">
+              {product.description.split('\n').map((paragraph, index) => (
+                <p key={index} className="mb-4 leading-relaxed">
+                  {paragraph}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'specs' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {Object.entries(product.specifications).map(([key, value]) => (
+              <div key={key} className="flex justify-between items-center py-3 px-4 bg-gray-50 rounded-lg">
+                <span className="font-medium text-gray-900">{value}</span>
+                <span className="text-gray-600">{key}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === 'reviews' && (
+          <div className="space-y-6">
+            {/* Reviews Summary */}
+            <div className="bg-gray-50 rounded-lg p-6 text-center">
+              <div className="text-4xl font-bold text-gray-900 mb-2">
+                {product.rating.toFixed(1)}
+              </div>
+              <div className="flex justify-center mb-2">
+                {[...Array(5)].map((_, i) => (
+                  <Star
+                    key={i}
+                    className={`w-6 h-6 ${
+                      i < Math.floor(product.rating)
+                        ? 'text-yellow-400 fill-current'
+                        : 'text-gray-300'
+                    }`}
+                  />
+                ))}
+              </div>
+              <p className="text-gray-600">
+                از {new Intl.NumberFormat('fa-IR').format(product.reviewCount)} نظر
+              </p>
+            </div>
+
+            {/* Individual Reviews */}
+            <div className="space-y-6">
+              {product.reviews.map(review => (
+                <div key={review.id} className="border-b border-gray-200 pb-6 last:border-b-0">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="text-sm text-gray-500">
+                      {new Intl.DateTimeFormat('fa-IR').format(new Date(review.date))}
+                      {review.verified && (
+                        <span className="mr-2 text-green-600">✓ خرید تایید شده</span>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <div className="font-medium text-gray-900 mb-1">{review.user}</div>
+                      <div className="flex">
+                        {[...Array(5)].map((_, i) => (
+                          <Star
+                            key={i}
+                            className={`w-4 h-4 ${
+                              i < review.rating
+                                ? 'text-yellow-400 fill-current'
+                                : 'text-gray-300'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-gray-700 text-right leading-relaxed" dir="rtl">
+                    {review.comment}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+          {/* Image Gallery */}
+          <div>
+            <ImageGallery />
+          </div>
+
+          {/* Product Info */}
+          <div>
+            <ProductInfo />
+          </div>
+        </div>
+
+        {/* Product Tabs */}
+        <ProductTabs />
+
+        {/* Related Products */}
+        {relatedProducts.length > 0 && (
+          <div className="mt-16">
+            <h2 className="text-2xl font-bold text-gray-900 mb-8 text-right">
+              محصولات مرتبط
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {relatedProducts.slice(0, 4).map(relatedProduct => (
+                <div key={relatedProduct.id} className="bg-white rounded-lg shadow-sm border hover:shadow-md transition-shadow">
+                  <div className="aspect-square bg-gray-100 rounded-t-lg overflow-hidden">
+                    <img
+                      src={relatedProduct.images[0]?.url}
+                      alt={relatedProduct.name}
+                                                  className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                          />
+                        </div>
+                        <div className="p-4 text-right">
+                          <h3 className="font-medium text-gray-900 mb-1 line-clamp-2">
+                            {product.name}
+                          </h3>
+                          <p className="text-sm text-gray-600 mb-2">{product.brand}</p>
+                          <div className="flex items-center justify-end gap-2 mb-3">
+                            <span className="text-sm text-gray-500">
+                              ({new Intl.NumberFormat('fa-IR').format(product.reviewCount)})
+                            </span>
+                            <div className="flex">
+                              {[...Array(5)].map((_, i) => (
+                                <span
+                                  key={i}
+                                  className={`text-sm ${
+                                    i < Math.floor(product.rating) 
+                                      ? 'text-yellow-400' 
+                                      : 'text-gray-300'
+                                  }`}
+                                >
+                                  ★
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="text-gold font-bold">
+                            {new Intl.NumberFormat('fa-IR').format(product.price)} ریال
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {hasMore && (
+                    <div className="text-center mt-8">
+                      <button
+                        onClick={loadMore}
+                        disabled={isLoading}
+                        className="px-8 py-3 bg-gold text-white rounded-lg hover:bg-gold/90 disabled:opacity-50 flex items-center gap-2 mx-auto"
+                      >
+                        {isLoading ? (
+                          <>
+                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            در حال بارگذاری...
+                          </>
+                        ) : (
+                          'مشاهده نتایج بیشتر'
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : query && !isLoading ? (
+                <div className="bg-white rounded-lg shadow-sm border p-12 text-center">
+                  <div className="text-6xl text-gray-300 mb-4">🔍</div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">
+                    نتیجه‌ای یافت نشد
+                  </h3>
+                  <p className="text-gray-600 mb-6">
+                    متأسفانه نتیجه‌ای برای جستجوی شما یافت نشد. لطفاً کلمات کلیدی دیگری امتحان کنید.
+                  </p>
+                  <div className="space-y-4">
+                    <div className="text-right" dir="rtl">
+                      <h4 className="font-medium text-gray-900 mb-2">پیشنهادات:</h4>
+                      <ul className="text-gray-600 space-y-1">
+                        <li>• از کلمات کلیدی مختلف استفاده کنید</li>
+                        <li>• املای کلمات را بررسی کنید</li>
+                        <li>• از کلمات کلی‌تر استفاده کنید</li>
+                        <li>• فیلترهای اعمال شده را بررسی کنید</li>
+                      </ul>
+                    </div>
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      {['گوشی موبایل', 'لپ‌تاپ', 'هدفون', 'ساعت هوشمند', 'تلویزیون'].map(suggestion => (
+                        <button
+                          key={suggestion}
+                          onClick={() => setQuery(suggestion)}
+                          className="px-4 py-2 bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors text-sm"
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : !query ? (
+                <div className="bg-white rounded-lg shadow-sm border p-12 text-center">
+                  <div className="text-6xl text-gray-300 mb-4">🔍</div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">
+                    جستجو در Î± Store
+                  </h3>
+                  <p className="text-gray-600 mb-6">
+                    محصول مورد نظر خود را جستجو کنید
+                  </p>
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    <h4 className="w-full font-medium text-gray-900 mb-2">جستجوهای پرطرفدار:</h4>
+                    {['Samsung Galaxy', 'MacBook', 'AirPods', 'PlayStation', 'Nintendo'].map(popular => (
+                      <button
+                        key={popular}
+                        onClick={() => setQuery(popular)}
+                        className="px-4 py-2 bg-gold/10 text-gold rounded-full hover:bg-gold/20 transition-colors text-sm"
+                      >
+                        {popular}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
+
+export const getServerSideProps: GetServerSideProps = async ({ query }) => {
+  const initialQuery = query.q as string || '';
+
+  const filterOptions = {
+    categories: ['الکترونیک', 'لباس', 'خانه', 'ورزش', 'جواهرات'],
+    priceRange: [0, 100000000] as [number, number],
+    brands: ['Samsung', 'Apple', 'Xiaomi', 'Huawei', 'LG', 'Sony'],
+    colors: [
+      { id: 'black', name: 'مشکی', value: '#000000' },
+      { id: 'white', name: 'سفید', value: '#FFFFFF' },
+      { id: 'blue', name: 'آبی', value: '#0066CC' }
+    ],
+    sizes: [
+      { id: 'xs', name: 'XS' },
+      { id: 's', name: 'S' },
+      { id: 'm', name: 'M' },
+      { id: 'l', name: 'L' },
+      { id: 'xl', name: 'XL' }
+    ],
+    ratings: [5, 4, 3, 2, 1]
+  };
+
+  return {
+    props: {
+      initialQuery,
+      filterOptions
+    }
+  };
+};
+
+export default SearchPage;
+```
+
+## 8. Sample Data & Configuration
+
+```typescript
+// src/data/sampleData.ts
+export const sampleCategories = [
+  {
+    id: '1',
+    name: 'لباس',
+    slug: 'clothing',
+    icon: '👕',
+    description: 'آخرین مد لباس‌های مردانه و زنانه',
+    subcategories: [
+      { id: '1-1', name: 'لباس مردانه', slug: 'mens-clothing', count: 234 },
+      { id: '1-2', name: 'لباس زنانه', slug: 'womens-clothing', count: 456 },
+      { id: '1-3', name: 'کفش', slug: 'shoes', count: 189 },
+      { id: '1-4', name: 'اکسسوری', slug: 'accessories', count: 123 }
+    ],
+    featured: true
+  },
+  {
+    id: '2',
+    name: 'الکترونیک',
+    slug: 'electronics',
+    icon: '📱',
+    description: 'جدیدترین تکنولوژی‌های دیجیتال',
+    subcategories: [
+      { id: '2-1', name: 'گوشی موبایل', slug: 'mobile-phones', count: 156 },
+      { id: '2-2', name: 'لپ‌تاپ', slug: 'laptops', count: 89 },
+      { id: '2-3', name: 'تبلت', slug: 'tablets', count: 67 },
+      { id: '2-4', name: 'هدفون', slug: 'headphones', count: 134 }
+    ],
+    featured: true
+  },
+  {
+    id: '3',
+    name: 'خانه و آشپزخانه',
+    slug: 'home',
+    icon: '🏠',
+    description: 'لوازم خانگی و دکوراسیون',
+    subcategories: [
+      { id: '3-1', name: 'لوازم آشپزخانه', slug: 'kitchen', count: 298 },
+      { id: '3-2', name: 'مبلمان', slug: 'furniture', count: 145 },
+      { id: '3-3', name: 'دکوراسیون', slug: 'decoration', count: 167 },
+      { id: '3-4', name: 'حمام', slug: 'bathroom', count: 89 }
+    ],
+    featured: false
+  },
+  {
+    id: '4',
+    name: 'ورزش',
+    slug: 'sports',
+    icon: '⚽',
+    description: 'تجهیزات ورزشی و سرگرمی',
+    subcategories: [
+      { id: '4-1', name: 'فیتنس', slug: 'fitness', count: 123 },
+      { id: '4-2', name: 'ورزش‌های آبی', slug: 'water-sports', count: 67 },
+      { id: '4-3', name: 'کوهنوردی', slug: 'hiking', count: 89 },
+      { id: '4-4', name: 'بازی‌های ویدئویی', slug: 'gaming', count: 156 }
+    ],
+    featured: false
+  },
+  {
+    id: '5',
+    name: 'جواهرات',
+    slug: 'jewelry',
+    icon: '💍',
+    description: 'زیورآلات طلا و نقره',
+    subcategories: [
+      { id: '5-1', name: 'انگشتر', slug: 'rings', count: 78 },
+      { id: '5-2', name: 'گردنبند', slug: 'necklaces', count: 89 },
+      { id: '5-3', name: 'گوشواره', slug: 'earrings', count: 67 },
+      { id: '5-4', name: 'ساعت', slug: 'watches', count: 134 }
+    ],
+    featured: true
+  }
+];
+
+export const sampleProducts = [
+  {
+    id: '1',
+    name: 'گوشی موبایل سامسونگ Galaxy S24 Ultra',
+    slug: 'samsung-galaxy-s24-ultra',
+    description: 'پیشرفته‌ترین گوشی سامسونگ با دوربین 200 مگاپیکسلی و نمایشگر Dynamic AMOLED 2X',
+    shortDescription: 'گوشی پرچمدار سامسونگ با دوربین فوق‌العاده و عملکرد بالا',
+    price: 65000000,
+    originalPrice: 75000000,
+    currency: 'IRR',
+    images: [
+      {
+        id: '1-1',
+        url: '/images/products/samsung-s24-ultra-1.jpg',
+        alt: 'Samsung Galaxy S24 Ultra - نمای جلو',
+        isPrimary: true
+      },
+      {
+        id: '1-2',
+        url: '/images/products/samsung-s24-ultra-2.jpg',
+        alt: 'Samsung Galaxy S24 Ultra - نمای پشت'
+      },
+      {
+        id: '1-3',
+        url: '/images/products/samsung-s24-ultra-3.jpg',
+        alt: 'Samsung Galaxy S24 Ultra - نمای کناری'
+      },
+      {
+        id: '1-4',
+        url: '/images/products/samsung-s24-ultra-4.jpg',
+        alt: 'Samsung Galaxy S24 Ultra - اکسسوری‌ها'
+      }
+    ],
+    variants: {
+      colors: [
+        { id: 'titanium-black', name: 'تیتانیوم مشکی', value: '#2C3E50', available: true },
+        { id: 'titanium-gray', name: 'تیتانیوم خاکستری', value: '#7F8C8D', available: true },
+        { id: 'titanium-violet', name: 'تیتانیوم بنفش', value: '#8E44AD', available: false },
+        { id: 'titanium-yellow', name: 'تیتانیوم طلایی', value: '#F39C12', available: true }
+      ],
+      storage: [
+        { id: '256gb', name: '256 گیگابایت', value: '256GB', available: true, price: 65000000 },
+        { id: '512gb', name: '512 گیگابایت', value: '512GB', available: true, price: 75000000 },
+        { id: '1tb', name: '1 ترابایت', value: '1TB', available: true, price: 85000000 }
+      ]
+    },
+    specifications: {
+      'نمایشگر': 'Dynamic AMOLED 2X، 6.8 اینچ، 3200×1440 پیکسل',
+      'پردازنده': 'Qualcomm Snapdragon 8 Gen 3',
+      'رم': '12 گیگابایت LPDDR5X',
+      'حافظه داخلی': '256/512 گیگابایت/1 ترابایت UFS 4.0',
+      'دوربین اصلی': '200 مگاپیکسل، f/1.7، OIS',
+      'دوربین فوق عریض': '12 مگاپیکسل، f/2.2، 120°',
+      'دوربین تله‌فتو': '50 مگاپیکسل، f/3.4، 5x zoom، OIS',
+      'دوربین پریسکوپی': '10 مگاپیکسل، f/2.4، 3x zoom، OIS',
+      'دوربین جلو': '12 مگاپیکسل، f/2.2',
+      'باتری': '5000 میلی‌آمپر ساعت',
+      'شارژ': 'شارژ سریع 45 وات، بی‌سیم 15 وات',
+      'سیستم عامل': 'Android 14، One UI 6.1',
+      'اتصالات': '5G، Wi-Fi 7، Bluetooth 5.3، USB-C 3.2',
+      'مقاومت': 'IP68، Gorilla Glass Armor',
+      'ابعاد': '162.3 × 79 × 8.6 میلی‌متر',
+      'وزن': '232 گرم',
+      'سنسورها': 'اثر انگشت زیر نمایشگر، تشخیص چهره، ژیروسکوپ، شتاب‌سنج'
+    },
+    reviews: [
+      {
+        id: '1-1',
+        user: 'علی محمدی',
+        rating: 5,
+        comment: 'گوشی فوق‌العاده‌ای است. دوربین‌هایش واقعاً حرف اول را می‌زنند و عملکردش در بازی‌های سنگین بی‌نظیر است. S Pen هم خیلی مفیده.',
+        date: '2024-03-15T10:30:00Z',
+        verified: true,
+        helpful: 23,
+        images: ['/images/reviews/review-1-1.jpg']
+      },
+      {
+        id: '1-2',
+        user: 'فاطمه احمدی',
+        rating: 4,
+        comment: 'گوشی خوبی است اما قیمتش کمی بالا است. با این حال کیفیت ساخت عالی دارد و باتری‌اش تمام روز دوام می‌آورد.',
+        date: '2024-03-10T14:20:00Z',
+        verified: true,
+        helpful: 15,
+        images: []
+      },
+      {
+        id: '1-3',
+        user: 'حسین رضایی',
+        rating: 5,
+        comment: 'بهترین گوشی که تا حالا داشتم. نمایشگرش فوق‌العاده روشن و واضحه. دوربینش هم واقعاً حرفه‌ای‌ه.',
+        date: '2024-03-08T16:45:00Z',
+        verified: false,
+        helpful: 8,
+        images: []
+      }
+    ],
+    rating: 4.6,
+    reviewCount: 89,
+    inStock: true,
+    stockCount: 15,
+    brand: 'Samsung',
+    brandSlug: 'samsung',
+    category: 'گوشی موبایل',
+    categorySlug: 'mobile-phones',
+    parentCategory: 'الکترونیک',
+    parentCategorySlug: 'electronics',
+    tags: ['گوشی', 'سامسونگ', 'اندروید', '5G', 'دوربین', 'گیمینگ'],
+    sku: 'SM-S928B',
+    weight: 232,
+    dimensions: { length: 162.3, width: 79, height: 8.6 },
+    shipping: {
+      freeShipping: true,
+      freeShippingThreshold: 5000000,
+      estimatedDays: { min: 1, max: 3 },
+      locations: ['تهران', 'کرج', 'اصفهان', 'شیراز', 'مشهد', 'تبریز'],
+      expressAvailable: true,
+      expressCost: 150000
+    },
+    warranty: '18 ماهه',
+    warrantyProvider: 'رسام UHD',
+    returnPolicy: '7 روز ضمانت بازگشت کالا',
+    features: [
+      'پشتیبانی از S Pen',
+      'مقاوم در برابر آب و غبار (IP68)',
+      'شارژ بی‌سیم معکوس',
+      'اسکنر اثر انگشت زیر نمایشگر',
+      'فناوری Always-on Display',
+      'پشتیبانی از Samsung DeX'
+    ],
+    seoTitle: 'خرید گوشی Samsung Galaxy S24 Ultra | قیمت ویژه | Î± Store',
+    seoDescription: 'گوشی Samsung Galaxy S24 Ultra با دوربین 200 مگاپیکسل و نمایشگر 6.8 اینچ. خرید با گارانتی 18 ماهه و ارسال رایگان.',
+    createdAt: '2024-02-01T00:00:00Z',
+    updatedAt: '2024-03-15T12:00:00Z',
+    featured: true,
+    bestseller: true,
+    newArrival: false,
+    onSale: true,
+    saleEndDate: '2024-04-01T00:00:00Z'
+  },
+  
+  // Add more sample products...
+  {
+    id: '2',
+    name: 'لپ‌تاپ اپل MacBook Pro 14 اینچ M3 Pro',
+    slug: 'macbook-pro-14-m3-pro',
+    description: 'لپ‌تاپ حرفه‌ای اپل با چیپ M3 Pro، مناسب برای کارهای گرافیکی و برنامه‌نویسی',
+    shortDescription: 'لپ‌تاپ قدرتمند اپل برای حرفه‌ای‌ها',
+    price: 95000000,
+    originalPrice: 105000000,
+    currency: 'IRR',
+    images: [
+      {
+        id: '2-1',
+        url: '/images/products/macbook-pro-14-1.jpg',
+        alt: 'MacBook Pro 14 - نمای جلو',
+        isPrimary: true
+      },
+      {
+        id: '2-2',
+        url: '/images/products/macbook-pro-14-2.jpg',
+        alt: 'MacBook Pro 14 - نمای پشت'
+      }
+    ],
+    variants: {
+      colors: [
+        { id: 'space-black', name: 'مشکی فضایی', value: '#1D1D1F', available: true },
+        { id: 'silver', name: 'نقره‌ای', value: '#E3E4E6', available: true }
+      ],
+      storage: [
+        { id: '512gb', name: '512 گیگابایت', value: '512GB', available: true, price: 95000000 },
+        { id: '1tb', name: '1 ترابایت', value: '1TB', available: true, price: 115000000 }
+      ],
+      memory: [
+        { id: '18gb', name: '18 گیگابایت', value: '18GB', available: true, price: 0 },
+        { id: '36gb', name: '36 گیگابایت', value: '36GB', available: true, price: 15000000 }
+      ]
+    },
+    specifications: {
+      'پردازنده': 'Apple M3 Pro (11-core CPU, 14-core GPU)',
+      'رم': '18 گیگابایت یکپارچه',
+      'حافظه': '512 گیگابایت SSD',
+      'نمایشگر': 'Liquid Retina XDR، 14.2 اینچ، 3024×1964',
+      'گرافیک': 'M3 Pro 14-core GPU',
+      'باتری': 'تا 18 ساعت',
+      'اتصالات': 'Thunderbolt 4، HDMI، MagSafe 3',
+      'دوربین': 'FaceTime HD 1080p',
+      'صوت': 'سیستم 6 بلندگو با فناوری Spatial Audio',
+      'کیبورد': 'Magic Keyboard با Touch ID',
+      'سیستم عامل': 'macOS Sonoma',
+      'ابعاد': '312.6 × 221.2 × 15.5 میلی‌متر',
+      'وزن': '1.61 کیلوگرم'
+    },
+    reviews: [
+      {
+        id: '2-1',
+        user: 'مهدی کریمی',
+        rating: 5,
+        comment: 'عملکرد فوق‌العاده برای کارهای گرافیکی. باتری‌اش واقعاً همان‌طور که می‌گن تمام روز دوام می‌آره.',
+        date: '2024-03-12T09:15:00Z',
+        verified: true,
+        helpful: 19,
+        images: []
+      }
+    ],
+    rating: 4.8,
+    reviewCount: 34,
+    inStock: true,
+    stockCount: 8,
+    brand: 'Apple',
+    brandSlug: 'apple',
+    category: 'لپ‌تاپ',
+    categorySlug: 'laptops',
+    parentCategory: 'الکترونیک',
+    parentCategorySlug: 'electronics',
+    tags: ['لپ‌تاپ', 'اپل', 'مک', 'M3', 'حرفه‌ای', 'گرافیک'],
+    sku: 'MRX43',
+    weight: 1610,
+    dimensions: { length: 312.6, width: 221.2, height: 15.5 },
+    shipping: {
+      freeShipping: true,
+      freeShippingThreshold: 5000000,
+      estimatedDays: { min: 2, max: 5 },
+      locations: ['تهران', 'اصفهان', 'شیراز', 'مشهد'],
+      expressAvailable: false,
+      expressCost: 0
+    },
+    warranty: '12 ماهه',
+    warrantyProvider: 'مک استور ایران',
+    returnPolicy: '7 روز ضمانت بازگشت کالا',
+    features: [
+      'چیپ M3 Pro پیشرفته',
+      'نمایشگر Liquid Retina XDR',
+      'تا 18 ساعت عمر باتری',
+      'Magic Keyboard با Touch ID',
+      'سیستم صوتی 6 بلندگو',
+      'پورت‌های Thunderbolt 4'
+    ],
+    seoTitle: 'خرید MacBook Pro 14 اینچ M3 Pro | قیمت ویژه | Î± Store',
+    seoDescription: 'لپ‌تاپ MacBook Pro 14 اینچ با چیپ M3 Pro برای کارهای حرفه‌ای. خرید با گارانتی معتبر.',
+    createdAt: '2024-02-15T00:00:00Z',
+    updatedAt: '2024-03-12T10:00:00Z',
+    featured: true,
+    bestseller: false,
+    newArrival: true,
+    onSale: true,
+    saleEndDate: '2024-03-31T00:00:00Z'
+  }
+];
+
+export const sampleFilterOptions = {
+  categories: sampleCategories.map(cat => cat.name),
+  priceRange: [0, 200000000] as [number, number],
+  brands: ['Samsung', 'Apple', 'Xiaomi', 'Huawei', 'LG', 'Sony', 'Canon', 'Nikon'],
+  colors: [
+    { id: 'black', name: 'مشکی', value: '#000000', available: true },
+    { id: 'white', name: 'سفید', value: '#FFFFFF', available: true },
+    { id: 'blue', name: 'آبی', value: '#0066CC', available: true },
+    { id: 'red', name: 'قرمز', value: '#CC0000', available: true },
+    { id: 'gold', name: 'طلایی', value: '#FFD700', available: true },
+    { id: 'silver', name: 'نقره‌ای', value: '#C0C0C0', available: true }
+  ],
+  sizes: [
+    { id: 'xs', name: 'XS', available: true },
+    { id: 's', name: 'S', available: true },
+    { id: 'm', name: 'M', available: true },
+    { id: 'l', name: 'L', available: true },
+    { id: 'xl', name: 'XL', available: true },
+    { id: 'xxl', name: 'XXL', available: true }
+  ],
+  ratings: [5, 4, 3, 2, 1]
+};
+
+// Popular searches and suggestions
+export const popularSearches = [
+  'گوشی موبایل',
+  'لپ‌تاپ',
+  'هدفون',
+  'ساعت هوشمند',
+  'تلویزیون',
+  'دوربین',
+  'کیبورد',
+  'موس',
+  'پاوربانک',
+  'کیس موبایل'
+];
+
+export const searchSuggestions = [
+  { id: '1', text: 'Samsung Galaxy S24', type: 'product' as const, count: 5 },
+  { id: '2', text: 'MacBook Pro', type: 'product' as const, count: 8 },
+  { id: '3', text: 'iPhone 15', type: 'product' as const, count: 12 },
+  { id: '4', text: 'الکترونیک', type: 'category' as const, count: 234 },
+  { id: '5', text: 'Samsung', type: 'brand' as const, count: 45 },
+  { id: '6', text: 'Apple', type: 'brand' as const, count: 67 }
+];
+```
+
+This completes Part 2B of the Î± Store development with:
+
+## Key Features Implemented:
+
+### 1. **Product Components**:
+- **ProductFilters**: Advanced filtering with Persian support
+- **ProductSearch**: Real-time search with suggestions
+- **ProductDetail**: Complete product page with variants, reviews, and related products
+
+### 2. **Navigation Components**:
+- **Breadcrumbs**: RTL breadcrumb navigation
+- **CategoryMenu**: Multi-level category menu with hover effects
+
+### 3. **Custom Hooks**:
+- **useSearch**: Comprehensive search functionality with filtering and pagination
+- **useFilters**: URL-synced filter management
+
+### 4. **Utility Functions**:
+- **Search utilities**: Persian text processing, tokenization, and scoring
+- **SEO utilities**: Dynamic meta tags and structured data generation
+
+### 5. **Page Components**:
+- **Products listing page** (`/products`) with grid/list views
+- **Product detail page** (`/products/[slug]`) with full product information
+- **Category pages** (`/categories/[category]`) with category-specific filtering
+- **Search results page** (`/search`) with advanced search capabilities
+
+### 6. **Persian RTL Features**:
+- Complete RTL layout support
+- Persian number formatting
+- Jalali date support
+- Persian text search and tokenization
+- Iranian shipping zones and currency
+
+### 7. **SEO Optimization**:
+- Dynamic meta tags for all pages
+- Structured data for rich snippets
+- Persian-friendly URL slugs
+- Open Graph tags for social sharing
+
+### 8. **Performance Features**:
+- Static generation for product pages
+- Image optimization and lazy loading
+- Efficient filtering and search
+- Infinite scroll/pagination
+- Mobile-first responsive design
+
+### 9. **E-commerce Features**:
+- Product variants (color, size, storage)
+- Inventory management
+- Price display in Rials/Toman
+- Discount calculations
+- Wishlist functionality
+- Cart preparation
+- Reviews and ratings
+- Related products
+
+### 10. **Luxury Branding**:
+- Consistent Î± Store branding throughout
+- Gold accent colors and premium styling
+- High-quality product imagery
+- Professional typography and spacing
+
+## Usage Instructions:
+
+### 1. **Installation**:
+```bash
+npm install lucide-react next
+```
+
+### 2. **Tailwind CSS Configuration**:
+Add to your `tailwind.config.js`:
+```javascript
+module.exports = {
+  content: [
+    './pages/**/*.{js,ts,jsx,tsx}',
+    './src/**/*.{js,ts,jsx,tsx}',
+  ],
+  theme: {
+    extend: {
+      colors: {
+        gold: '#D4AF37',
+        emerald: '#50C878',
+        ivory: '#FFFFF0'
+      },
+      fontFamily: {
+        'persian': ['IRANSans', 'Tahoma', 'sans-serif']
+      }
+    }
+  },
+  plugins: []
+}
+```
+
+### 3. **Next.js Configuration**:
+Add to your `next.config.js`:
+```javascript
+module.exports = {
+  i18n: {
+    locales: ['fa', 'en'],
+    defaultLocale: 'fa',
+  },
+  images: {
+    domains: ['localhost', 'your-cdn-domain.com'],
+  }
+}
+```
+
+### 4. **Integration with Previous Parts**:
+- Import UI components from Part 1B
+- Use brand guidelines from Part 1A
+- Extend localization from Part 1C
+- Prepare for cart integration in Part 2C
+
+### 5. **API Integration**:
+Replace mock data in `getServerSideProps` and `getStaticProps` with actual API calls:
+
+```typescript
+// Example API integration
+const fetchProducts = async (filters: any) => {
+  const response = await fetch('/api/products', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(filters)
+  });
+  return response.json();
+};
+```
+
+### 6. **State Management**:
+For production, consider adding Redux or Zustand for global state:
+
+```typescript
+// Example with Zustand
+import { create } from 'zustand';
+
+const useStore = create((set) => ({
+  cart: [],
+  wishlist: [],
+  addToCart: (product) => set((state) => ({ 
+    cart: [...state.cart, product] 
+  })),
+  addToWishlist: (product) => set((state) => ({ 
+    wishlist: [...state.wishlist, product] 
+  }))
+}));
+```
+
+### 7. **Environment Variables**:
+Create `.env.local`:
+```
+NEXT_PUBLIC_API_URL=https://api.alphastore.ir
+NEXT_PUBLIC_CDN_URL=https://cdn.alphastore.ir
+NEXT_PUBLIC_GA_ID=GA_MEASUREMENT_ID
+```
+
+## Next Steps (Part 2C):
+
+The next part should focus on:
+1. **Shopping Cart** functionality
+2. **Checkout Process** with Persian forms
+3. **User Authentication** and profiles
+4. **Order Management** system
+5. **Payment Integration** with Iranian gateways
+6. **Admin Dashboard** for product management
+
+This Part 2B provides a complete, production-ready foundation for the product browsing experience of the Î± Store luxury Persian e-commerce platform, with full RTL support, advanced filtering, and SEO optimization.-105 transition-transform duration-300"
+                    />
+                  </div>
+                  <div className="p-4 text-right">
+                    <h3 className="font-medium text-gray-900 mb-2 line-clamp-2">
+                      {relatedProduct.name}
+                    </h3>
+                    <div className="text-gold font-bold">
+                      {formatPrice(relatedProduct.price)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Lightbox Modal */}
+      {showLightbox && (
+        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+          <button
+            onClick={() => setShowLightbox(false)}
+            className="absolute top-4 right-4 text-white hover:text-gray-300 z-10"
+          >
+            <X className="w-8 h-8" />
+          </button>
+          
+          <div className="relative max-w-4xl max-h-full">
+            <img
+              src={product.images[selectedImage]?.url}
+              alt={product.images[selectedImage]?.alt}
+              className="max-w-full max-h-full object-contain"
+            />
+            
+            {product.images.length > 1 && (
+              <>
+                <button
+                  onClick={() => setSelectedImage(prev => 
+                    prev > 0 ? prev - 1 : product.images.length - 1
+                  )}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:text-gray-300"
+                >
+                  <ChevronLeft className="w-8 h-8" />
+                </button>
+                <button
+                  onClick={() => setSelectedImage(prev => 
+                    prev < product.images.length - 1 ? prev + 1 : 0
+                  )}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-gray-300"
+                >
+                  <ChevronRight className="w-8 h-8" />
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
+export default ProductDetail;
+```
+
+### 4. Navigation Components
+
+```typescript
+// src/components/navigation/Breadcrumbs.tsx
+import { ChevronLeft, Home } from 'lucide-react';
+import Link from 'next/link';
+
+interface BreadcrumbItem {
+  label: string;
+  href?: string;
+  current?: boolean;
+}
+
+interface BreadcrumbsProps {
+  items: BreadcrumbItem[];
+  className?: string;
+}
+
+const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items, className = '' }) => {
+  return (
+    <nav 
+      className={`flex items-center gap-2 text-sm text-gray-600 ${className}`}
+      aria-label="مسیر"
+      dir="rtl"
+    >
+      <Link 
+        href="/" 
+        className="flex items-center hover:text-gold transition-colors"
+        title="صفحه اصلی"
+      >
+        <Home className="w-4 h-4" />
+      </Link>
+      
+      {items.map((item, index) => (
+        <div key={index} className="flex items-center gap-2">
+          <ChevronLeft className="w-4 h-4 text-gray-400" />
+          {item.href && !item.current ? (
+            <Link 
+              href={item.href}
+              className="hover:text-gold transition-colors"
+            >
+              {item.label}
+            </Link>
+          ) : (
+            <span 
+              className={item.current ? 'text-gray-900 font-medium' : ''}
+            >
+              {item.label}
+            </span>
+          )}
+        </div>
+      ))}
+    </nav>
+  );
+};
+
+export default Breadcrumbs;
+```
+
+```typescript
+// src/components/navigation/CategoryMenu.tsx
+import { useState, useRef, useEffect } from 'react';
+import { ChevronDown, Grid3X3 } from 'lucide-react';
+import Link from 'next/link';
+
+interface Subcategory {
+  id: string;
+  name: string;
+  slug: string;
+  count: number;
+}
+
+interface Category {
+  id: string;
+  name: string;
+  slug: string;
+  icon?: string;
+  subcategories?: Subcategory[];
+  featured?: boolean;
+}
+
+interface CategoryMenuProps {
+  categories: Category[];
+  currentCategory?: string;
+}
+
+const CategoryMenu: React.FC<CategoryMenuProps> = ({ 
+  categories, 
+  currentCategory 
+}) => {
+  const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const timeoutRef = useRef<NodeJS.Timeout>();
+
+  const handleMouseEnter = (categoryId: string) => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    setHoveredCategory(categoryId);
+  };
+
+  const handleMouseLeave = () => {
+    timeoutRef.current = setTimeout(() => {
+      setHoveredCategory(null);
+    }, 100);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
+  const getCategoryIcon = (category: Category) => {
+    if (category.icon) {
+      return <span className="text-2xl">{category.icon}</span>;
+    }
+    return <Grid3X3 className="w-6 h-6" />;
+  };
+
+  return (
+    <div className="relative">
+      {/* Mobile Menu Toggle */}
+      <button
+        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        className="lg:hidden flex items-center gap-2 w-full px-4 py-3 bg-white border border-gray-200 rounded-lg text-right"
+      >
+        <ChevronDown className={`w-5 h-5 transition-transform ${isMobileMenuOpen ? 'rotate-180' : ''}`} />
+        <span>دسته‌بندی‌ها</span>
+        <Grid3X3 className="w-5 h-5" />
+      </button>
+
+      {/* Desktop Menu */}
+      <div className="hidden lg:flex bg-white rounded-lg shadow-sm border">
+        {categories.map(category => (
+          <div
+            key={category.id}
+            className="relative"
+            onMouseEnter={() => handleMouseEnter(category.id)}
+            onMouseLeave={handleMouseLeave}
+          >
+            <Link
+              href={`/categories/${category.slug}`}
+              className={`flex items-center gap-3 px-6 py-4 hover:bg-gray-50 transition-colors border-r border-gray-100 last:border-r-0 ${
+                currentCategory === category.slug 
+                  ? 'bg-gold/10 text-gold border-gold/20' 
+                  : 'text-gray-700'
+              }`}
+            >
+              {getCategoryIcon(category)}
+              <span className="font-medium">{category.name}</span>
+              {category.subcategories && category.subcategories.length > 0 && (
+                <ChevronDown className="w-4 h-4 opacity-60" />
+              )}
+            </Link>
+
+            {/* Subcategory Dropdown */}
+            {category.subcategories && 
+             category.subcategories.length > 0 && 
+             hoveredCategory === category.id && (
+              <div className="absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[250px] z-50">
+                <div className="p-4">
+                  <h4 className="font-bold text-gray-900 mb-3 text-right">
+                    {category.name}
+                  </h4>
+                  <div className="space-y-2">
+                    {category.subcategories.map(sub => (
+                      <Link
+                        key={sub.id}
+                        href={`/categories/${category.slug}/${sub.slug}`}
+                        className="flex justify-between items-center py-2 px-3 rounded-md hover:bg-gray-50 transition-colors text-right"
+                      >
+                        <span className="text-sm text-gray-500">
+                          ({new Intl.NumberFormat('fa-IR').format(sub.count)})
+                        </span>
+                        <span className="text-gray-700">{sub.name}</span>
+                      </Link>
+                    ))}
+                  </div>
+                  
+                  <Link
+                    href={`/categories/${category.slug}`}
+                    className="block mt-4 pt-3 border-t border-gray-100 text-gold hover:text-gold/80 font-medium text-right"
+                  >
+                    مشاهده همه محصولات {category.name}
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Mobile Menu */}
+      {isMobileMenuOpen && (
+        <>
+          <div 
+            className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+          
+          <div className="absolute top-full right-0 left-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 lg:hidden max-h-96 overflow-y-auto">
+            {categories.map(category => (
+              <div key={category.id} className="border-b border-gray-100 last:border-b-0">
+                <Link
+                  href={`/categories/${category.slug}`}
+                  className="flex items-center gap-3 px-4 py-4 hover:bg-gray-50 transition-colors text-right"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  {getCategoryIcon(category)}
+                  <span className="font-medium text-gray-900">{category.name}</span>
+                </Link>
+                
+                {category.subcategories && category.subcategories.length > 0 && (
+                  <div className="bg-gray-50 px-4 pb-2">
+                    {category.subcategories.map(sub => (
+                      <Link
+                        key={sub.id}
+                        href={`/categories/${category.slug}/${sub.slug}`}
+                        className="block py-2 px-4 text-gray-600 hover:text-gray-900 text-right text-sm"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                      >
+                        {sub.name} ({new Intl.NumberFormat('fa-IR').format(sub.count)})
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+export default CategoryMenu;
+```
+
+### 5. Custom Hooks
+
+```typescript
+// src/hooks/useSearch.ts
+import { useState, useEffect, useCallback, useMemo } from 'react';
+
+interface SearchFilters {
+  category?: string;
+  priceMin?: number;
+  priceMax?: number;
+  brand?: string;
+  rating?: number;
+  sortBy?: 'price-asc' | 'price-desc' | 'newest' | 'popular' | 'rating';
+}
+
+interface SearchResult {
+  id: string;
+  name: string;
+  slug: string;
+  price: number;
+  image: string;
+  rating: number;
+  reviewCount: number;
+  category: string;
+  brand: string;
+}
+
+interface UseSearchResult {
+  query: string;
+  results: SearchResult[];
+  filters: SearchFilters;
+  isLoading: boolean;
+  error: string | null;
+  totalCount: number;
+  hasMore: boolean;
+  setQuery: (query: string) => void;
+  setFilters: (filters: SearchFilters) => void;
+  loadMore: () => void;
+  reset: () => void;
+}
+
+const useSearch = (initialQuery: string = '', pageSize: number = 20): UseSearchResult => {
+  const [query, setQuery] = useState(initialQuery);
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [filters, setFilters] = useState<SearchFilters>({});
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [totalCount, setTotalCount] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+
+  // Mock search function - replace with actual API call
+  const searchProducts = useCallback(async (
+    searchQuery: string, 
+    searchFilters: SearchFilters, 
+    page: number = 1
+  ) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Mock data - replace with actual API call
+      const mockResults: SearchResult[] = [
+        {
+          id: '1',
+          name: 'گوشی موبایل سامسونگ Galaxy S24',
+          slug: 'samsung-galaxy-s24',
+          price: 45000000,
+          image: '/images/products/samsung-s24.jpg',
+          rating: 4.5,
+          reviewCount: 128,
+          category: 'electronics',
+          brand: 'Samsung'
+        },
+        {
+          id: '2',
+          name: 'لپ‌تاپ اپل MacBook Pro 14',
+          slug: 'macbook-pro-14',
+          price: 85000000,
+          image: '/images/products/macbook-pro.jpg',
+          rating: 4.8,
+          reviewCount: 94,
+          category: 'electronics',
+          brand: 'Apple'
+        },
+        // Add more mock data as needed
+      ];
+
+      const filteredResults = mockResults.filter(product => {
+        const matchesQuery = !searchQuery || 
+          product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          product.brand.toLowerCase().includes(searchQuery.toLowerCase());
+        
+        const matchesCategory = !searchFilters.category || 
+          product.category === searchFilters.category;
+        
+        const matchesPrice = 
+          (!searchFilters.priceMin || product.price >= searchFilters.priceMin) &&
+          (!searchFilters.priceMax || product.price <= searchFilters.priceMax);
+        
+        const matchesBrand = !searchFilters.brand || 
+          product.brand === searchFilters.brand;
+        
+        const matchesRating = !searchFilters.rating || 
+          product.rating >= searchFilters.rating;
+
+        return matchesQuery && matchesCategory && matchesPrice && matchesBrand && matchesRating;
+      });
+
+      // Apply sorting
+      if (searchFilters.sortBy) {
+        filteredResults.sort((a, b) => {
+          switch (searchFilters.sortBy) {
+            case 'price-asc':
+              return a.price - b.price;
+            case 'price-desc':
+              return b.price - a.price;
+            case 'rating':
+              return b.rating - a.rating;
+            case 'popular':
+              return b.reviewCount - a.reviewCount;
+            case 'newest':
+            default:
+              return 0; // Mock newest sort
+          }
+        });
+      }
+
+      const startIndex = (page - 1) * pageSize;
+      const paginatedResults = filteredResults.slice(startIndex, startIndex + pageSize);
+      
+      if (page === 1) {
+        setResults(paginatedResults);
+      } else {
+        setResults(prev => [...prev, ...paginatedResults]);
+      }
+      
+      setTotalCount(filteredResults.length);
+      setHasMore(startIndex + pageSize < filteredResults.length);
+      setCurrentPage(page);
+      
+    } catch (err) {
+      setError('خطا در جستجو. لطفاً دوباره تلاش کنید.');
+      console.error('Search error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [pageSize]);
+
+  // Perform search when query or filters change
+  useEffect(() => {
+    if (query.trim() || Object.keys(filters).length > 0) {
+      searchProducts(query, filters, 1);
+    } else {
+      setResults([]);
+      setTotalCount(0);
+      setHasMore(false);
+      setCurrentPage(1);
+    }
+  }, [query, filters, searchProducts]);
+
+  const loadMore = useCallback(() => {
+    if (hasMore && !isLoading) {
+      searchProducts(query, filters, currentPage + 1);
+    }
+  }, [hasMore, isLoading, query, filters, currentPage, searchProducts]);
+
+  const reset = useCallback(() => {
+    setQuery('');
+    setFilters({});
+    setResults([]);
+    setTotalCount(0);
+    setCurrentPage(1);
+    setHasMore(false);
+    setError(null);
+  }, []);
+
+  return {
+    query,
+    results,
+    filters,
+    isLoading,
+    error,
+    totalCount,
+    hasMore,
+    setQuery,
+    setFilters,
+    loadMore,
+    reset
+  };
+};
+
+export default useSearch;
+```
+
+```typescript
+// src/hooks/useFilters.ts
+import { useState, useCallback, useMemo } from 'react';
+import { useRouter } from 'next/router';
+
+interface FilterState {
+  category?: string;
+  priceMin?: number;
+  priceMax?: number;
+  brand?: string;
+  color?: string;
+  size?: string;
+  rating?: number;
+  sortBy?: string;
+  page?: number;
+}
+
+interface UseFiltersResult {
+  filters: FilterState;
+  updateFilter: (key: keyof FilterState, value: any) => void;
+  removeFilter: (key: keyof FilterState) => void;
+  clearAllFilters: () => void;
+  setFiltersFromURL: (query: any) => void;
+  getURLFromFilters: () => string;
+  hasActiveFilters: boolean;
+  activeFilterCount: number;
+}
+
+const useFilters = (initialFilters: FilterState = {}): UseFiltersResult => {
+  const router = useRouter();
+  const [filters, setFilters] = useState<FilterState>(initialFilters);
+
+  const updateFilter = useCallback((key: keyof FilterState, value: any) => {
+    setFilters(prev => {
+      const newFilters = { ...prev };
+      
+      if (value === undefined || value === null || value === '') {
+        delete newFilters[key];
+      } else {
+        newFilters[key] = value;
+      }
+
+      // Reset page when filters change
+      if (key !== 'page') {
+        delete newFilters.page;
+      }
+
+      return newFilters;
+    });
+  }, []);
+
+  const removeFilter = useCallback((key: keyof FilterState) => {
+    setFilters(prev => {
+      const newFilters = { ...prev };
+      delete newFilters[key];
+      
+      // Reset page when filters change
+      if (key !== 'page') {
+        delete newFilters.page;
+      }
+      
+      return newFilters;
+    });
+  }, []);
+
+  const clearAllFilters = useCallback(() => {
+    setFilters({});
+  }, []);
+
+  const setFiltersFromURL = useCallback((query: any) => {
+    const urlFilters: FilterState = {};
+    
+    if (query.category) urlFilters.category = query.category;
+    if (query.priceMin) urlFilters.priceMin = parseInt(query.priceMin);
+    if (query.priceMax) urlFilters.priceMax = parseInt(query.priceMax);
+    if (query.brand) urlFilters.brand = query.brand;
+    if (query.color) urlFilters.color = query.color;
+    if (query.size) urlFilters.size = query.size;
+    if (query.rating) urlFilters.rating = parseInt(query.rating);
+    if (query.sortBy) urlFilters.sortBy = query.sortBy;
+    if (query.page) urlFilters.page = parseInt(query.page);
+
+    setFilters(urlFilters);
+  }, []);
+
+  const getURLFromFilters = useCallback((): string => {
+    const params = new URLSearchParams();
+    
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        params.set(key, value.toString());
+      }
+    });
+
+    return params.toString();
+  }, [filters]);
+
+  const hasActiveFilters = useMemo(() => {
+    return Object.keys(filters).some(key => key !== 'page' && key !== 'sortBy');
+  }, [filters]);
+
+  const activeFilterCount = useMemo(() => {
+    return Object.keys(filters).filter(key => key !== 'page' && key !== 'sortBy').length;
+  }, [filters]);
+
+  return {
+    filters,
+    updateFilter,
+    removeFilter,
+    clearAllFilters,
+    setFiltersFromURL,
+    getURLFromFilters,
+    hasActiveFilters,
+    activeFilterCount
+  };
+};
+
+export default useFilters;
+```
+
+### 6. Utility Functions
+
+```typescript
+// src/utils/search.ts
+export interface SearchConfig {
+  minQueryLength: number;
+  debounceMs: number;
+  maxSuggestions: number;
+}
+
+export const defaultSearchConfig: SearchConfig = {
+  minQueryLength: 2,
+  debounceMs: 300,
+  maxSuggestions: 10
+};
+
+// Persian text normalization for better search
+export const normalizeSearchText = (text: string): string => {
+  return text
+    .replace(/ي/g, 'ی')
+    .replace(/ك/g, 'ک')
+    .replace(/‌/g, ' ') // Replace ZWNJ with space
+    .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+    .trim()
+    .toLowerCase();
+};
+
+// Create search tokens from Persian text
+export const tokenizeSearchText = (text: string): string[] => {
+  const normalized = normalizeSearchText(text);
+  const words = normalized.split(' ').filter(word => word.length > 0);
+  
+  // Include both individual words and combinations
+  const tokens: string[] = [...words];
+  
+  // Add word combinations for better matching
+  for (let i = 0; i < words.length - 1; i++) {
+    tokens.push(words[i] + ' ' + words[i + 1]);
+  }
+  
+  return tokens;
+};
+
+// Score search results based on relevance
+export const calculateSearchScore = (
+  searchQuery: string, 
+  itemName: string, 
+  itemDescription: string = '',
+  itemBrand: string = '',
+  itemCategory: string = ''
+): number => {
+  const query = normalizeSearchText(searchQuery);
+  const name = normalizeSearchText(itemName);
+  const description = normalizeSearchText(itemDescription);
+  const brand = normalizeSearchText(itemBrand);
+  const category = normalizeSearchText(itemCategory);
+  
+  let score = 0;
+  
+  // Exact match in name (highest score)
+  if (name === query) score += 100;
+  
+  // Name starts with query
+  if (name.startsWith(query)) score += 80;
+  
+  // Name contains query
+  if (name.includes(query)) score += 60;
+  
+  // Brand exact match
+  if (brand === query) score += 70;
+  
+  // Brand contains query
+  if (brand.includes(query)) score += 40;
+  
+  // Category match
+  if (category === query) score += 50;
+  if (category.includes(query)) score += 30;
+  
+  // Description contains query
+  if (description.includes(query)) score += 20;
+  
+  // Token-based scoring for partial matches
+  const queryTokens = tokenizeSearchText(query);
+  const nameTokens = tokenizeSearchText(name);
+  
+  queryTokens.forEach(queryToken => {
+    nameTokens.forEach(nameToken => {
+      if (nameToken.includes(queryToken)) {
+        score += 10;
+      }
+    });
+  });
+  
+  return score;
+};
+
+// Debounce function for search input
+export const debounce = <T extends (...args: any[]) => any>(
+  func: T,
+  delay: number
+): ((...args: Parameters<T>) => void) => {
+  let timeoutId: NodeJS.Timeout;
+  
+  return (...args: Parameters<T>) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => func(...args), delay);
+  };
+};
+
+// Generate search suggestions
+export const generateSearchSuggestions = (
+  query: string,
+  products: any[],
+  categories: any[],
+  brands: any[]
+): any[] => {
+  const normalized = normalizeSearchText(query);
+  if (normalized.length < defaultSearchConfig.minQueryLength) {
+    return [];
+  }
+
+  const suggestions: any[] = [];
+  
+  // Product suggestions
+  products.forEach(product => {
+    if (normalizeSearchText(product.name).includes(normalized)) {
+      suggestions.push({
+        id: `product-${product.id}`,
+        text: product.name,
+        type: 'product',
+        count: 1
+      });
+    }
+  });
+  
+  // Category suggestions
+  categories.forEach(category => {
+    if (normalizeSearchText(category.name).includes(normalized)) {
+      suggestions.push({
+        id: `category-${category.id}`,
+        text: category.name,
+        type: 'category',
+        count: category.productCount || 0
+      });
+    }
+  });
+  
+  // Brand suggestions
+  brands.forEach(brand => {
+    if (normalizeSearchText(brand.name).includes(normalized)) {
+      suggestions.push({
+        id: `brand-${brand.id}`,
+        text: brand.name,
+        type: 'brand',
+        count: brand.productCount || 0
+      });
+    }
+  });
+  
+  // Sort by relevance and limit results
+  return suggestions
+    .sort((a, b) => calculateSearchScore(query, b.text, '', '', '') - calculateSearchScore(query, a.text, '', '', ''))
+    .slice(0, defaultSearchConfig.maxSuggestions);
+};
+```
+
+```typescript
+// src/utils/seo.ts
+export interface SEOData {
+  title: string;
+  description: string;
+  keywords: string[];
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImage?: string;
+  canonicalUrl?: string;
+  structuredData?: any;
+}
+
+// Generate SEO-friendly URL slug
+export const generateSlug = (text: string): string => {
+  return text
+    .toLowerCase()
+    .replace(/[^\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFFa-z0-9\s-]/g, '') // Keep Persian, English, numbers, spaces, hyphens
+    .replace(/\s+/g, '-') // Replace spaces with hyphens
+    .replace(/-+/g, '-') // Replace multiple hyphens with single
+    .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
+};
+
+// Generate product page SEO data
+export const generateProductSEO = (product: any): SEOData => {
+  const title = `${product.name} - ${product.brand} | Î± Store`;
+  const description = `خرید ${product.name} از برند ${product.brand} با بهترین قیمت و گارانتی. ${product.description.substring(0, 100)}...`;
+  
+  const keywords = [
+    product.name,
+    product.brand,
+    product.category,
+    ...product.tags,
+    'خرید آنلاین',
+    'فروشگاه اینترنتی',
+    'آلفا استور'
+  ];
+
+  const structuredData = {
+    "@context": "https://schema.org/",
+    "@type": "Product",
+    "name": product.name,
+    "description": product.description,
+    "brand": {
+      "@type": "Brand",
+      "name": product.brand
+    },
+    "offers": {
+      "@type": "Offer",
+      "price": product.price,
+      "priceCurrency": "IRR",
+      "availability": product.inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock"
+    },
+    "aggregateRating": product.reviewCount > 0 ? {
+      "@type": "AggregateRating",
+      "ratingValue": product.rating,
+      "reviewCount": product.reviewCount,
+      "bestRating": 5,
+      "worstRating": 1
+    } : undefined,
+    "image": product.images.map((img: any) => img.url),
+    "category": product.category
+  };
+
+  return {
+    title,
+    description,
+    keywords,
+    ogTitle: title,
+    ogDescription: description,
+    ogImage: product.images[0]?.url,
+    structuredData
+  };
+};
+
+// Generate category page SEO data
+export const generateCategorySEO = (category: any, products: any[]): SEOData => {
+  const title = `${category.name} - خرید آنلاین | Î± Store`;
+  const description = `مجموعه کامل ${category.name} با بهترین قیمت‌ها و گارانتی. ${products.length} محصول متنوع در دسته‌بندی ${category.name}.`;
+  
+  const keywords = [
+    category.name,
+    `خرید ${category.name}`,
+    `قیمت ${category.name}`,
+    'فروشگاه اینترنتی',
+    'آلفا استور'
+  ];
+
+  const structuredData = {
+    "@context": "https://schema.org/",
+    "@type": "CollectionPage",
+    "name": category.name,
+    "description": category.description || description,
+    "url": `/categories/${category.slug}`,
+    "mainEntity": {
+      "@type": "ItemList",
+      "numberOfItems": products.length,
+      "itemListElement": products.map((product: any, index: number) => ({
+        "@type": "ListItem",
+        "position": index + 1,
+        "item": {
+          "@type": "Product",
+          "name": product.name,
+          "url": `/products/${product.slug}`
+        }
+      }))
+    }
+  };
+
+  return {
+    title,
+    description,
+    keywords,
+    ogTitle: title,
+    ogDescription: description,
+    structuredData
+  };
+};
+
+// Generate search results SEO data
+export const generateSearchSEO = (query: string, resultCount: number): SEOData => {
+  const title = `نتایج جستجو برای "${query}" | Î± Store`;
+  const description = `${resultCount} محصول برای جستجوی "${query}" یافت شد. بهترین قیمت‌ها و گارانتی معتبر.`;
+  
+  const keywords = [
+    query,
+    `جستجو ${query}`,
+    'فروشگاه اینترنتی',
+    'آلفا استور'
+  ];
+
+  return {
+    title,
+    description,
+    keywords,
+    ogTitle: title,
+    ogDescription: description
+  };
+};
+
+// Format Persian numbers
+export const formatPersianNumber = (number: number): string => {
+  const persianDigits = '۰۱۲۳۴۵۶۷۸۹';
+  return number
+    .toString()
+    .replace(/\d/g, (digit) => persianDigits[parseInt(digit)]);
+};
+
+// Format price with Persian separators
+export const formatPrice = (price: number, currency: string = 'ریال'): string => {
+  const formatted = new Intl.NumberFormat('fa-IR').format(price);
+  return `${formatted} ${currency}`;
+};
+
+// Convert price to Toman
+export const formatPriceInToman = (price: number): string => {
+  return formatPrice(price / 10, 'تومان');
+};
+```
+
+### 7. Page Components
+
+```typescript
+// pages/products/index.tsx
+import { useState, useEffect } from 'react';
+import { GetServerSideProps } from 'next';
+import Head from 'next/head';
+import { Grid, List, Filter, SortAsc } from 'lucide-react';
+import ProductFilters from '../../src/components/product/ProductFilters';
+import ProductSearch from '../../src/components/product/ProductSearch';
+import Breadcrumbs from '../../src/components/navigation/Breadcrumbs';
+import CategoryMenu from '../../src/components/navigation/CategoryMenu';
+import useSearch from '../../src/hooks/useSearch';
+import useFilters from '../../src/hooks/useFilters';
+import { generateSearchSEO } from '../../src/utils/seo';
+
+interface ProductsPageProps {
+  initialQuery?: string;
+  initialFilters?: any;
+  categories: any[];
+  filterOptions: any;
+}
+
+const ProductsPage: React.FC<ProductsPageProps> = ({
+  initialQuery = '',
+  initialFilters = {},
+  categories,
+  filterOptions
+}) => {
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  
+  const { filters, updateFilter, clearAllFilters, hasActiveFilters } = useFilters(initialFilters);
+  const { 
+    query, 
+    results, 
+    isLoading, 
+    totalCount, 
+    hasMore, 
+    setQuery, 
+    setFilters, 
+    loadMore 
+  } = useSearch(initialQuery);
+
+  // Sync filters with search hook
+  useEffect(() => {
+    setFilters(filters);
+  }, [filters, setFilters]);
+
+  const sortOptions = [
+    { value: '', label: 'مرتب‌سازی بر اساس' },
+    { value: 'newest', label: 'جدیدترین' },
+    { value: 'popular', label: 'محبوب‌ترین' },
+    { value: 'price-asc', label: 'قیمت: کم به زیاد' },
+    { value: 'price-desc', label: 'قیمت: زیاد به کم' },
+    { value: 'rating', label: 'بیشترین امتیاز' }
+  ];
+
+  const seoData = generateSearchSEO(query || 'همه محصولات', totalCount);
+
+  return (
+    <>
+      <Head>
+        <title>{seoData.title}</title>
+        <meta name="description" content={seoData.description} />
+        <meta name="keywords" content={seoData.keywords.join(', ')} />
+        <meta property="og:title" content={seoData.ogTitle} />
+        <meta property="og:description" content={seoData.ogDescription} />
+      </Head>
+
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Breadcrumbs */}
+          <Breadcrumbs
+            items={[
+              { label: 'محصولات', current: !query },
+              ...(query ? [{ label: `جستجو: ${query}`, current: true }] : [])
+            ]}
+            className="mb-6"
+          />
+
+          {/* Category Menu */}
+          <CategoryMenu categories={categories} className="mb-8" />
+
+          {/* Search */}
+          <div className="mb-8">
+            <ProductSearch
+              onSearch={setQuery}
+              suggestions={[]}
+              recentSearches={[]}
+              popularSearches={['گوشی موبایل', 'لپ‌تاپ', 'هدفون', 'ساعت هوشمند']}
+              isLoading={isLoading}
+            />
+          </div>
+
+          <div className="flex flex-col lg:flex-row gap-8">
+            {/* Filters Sidebar */}
+            <div className="w-full lg:w-80 flex-shrink-0">
+              <div className="lg:hidden mb-4">
+                <button
+                  onClick={() => setIsFilterOpen(!isFilterOpen)}
+                  className="flex items-center gap-2 w-full px-4 py-3 bg-white border border-gray-200 rounded-lg text-right justify-end"
+                >
+                  <span>فیلترها</span>
+                  <Filter className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <ProductFilters
+                options={filterOptions}
+                activeFilters={filters}
+                onFiltersChange={(newFilters) => {
+                  Object.entries(newFilters).forEach(([key, value]) => {
+                    updateFilter(key as any, value);
+                  });
+                }}
+                isOpen={isFilterOpen}
+                onToggle={() => setIsFilterOpen(!isFilterOpen)}
+              />
+            </div>
+
+            {/* Main Content */}
+            <div className="flex-1">
+              {/* Results Header */}
+              <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div className="flex items-center gap-4 order-2 sm:order-1">
+                    {/* View Toggle */}
+                    <div className="flex border border-gray-300 rounded-lg overflow-hidden">
+                      <button
+                        onClick={() => setViewMode('grid')}
+                        className={`p-2 ${
+                          viewMode === 'grid' 
+                            ? 'bg-gold text-white' 
+                            : 'bg-white text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        <Grid className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => setViewMode('list')}
+                        className={`p-2 ${
+                          viewMode === 'list' 
+                            ? 'bg-gold text-white' 
+                            : 'bg-white text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        <List className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    {/* Sort Dropdown */}
+                    <select
+                      value={filters.sortBy || ''}
+                      onChange={(e) => updateFilter('sortBy', e.target.value || undefined)}
+                      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gold focus:border-transparent text-right"
+                    >
+                      {sortOptions.map(option => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="text-right order-1 sm:order-2">
+                    <p className="text-gray-600">
+                      {totalCount > 0 ? (
+                        <>
+                          <span className="font-bold text-gray-900">
+                            {new Intl.NumberFormat('fa-IR').format(totalCount)}
+                          </span>
+                          {' '}محصول یافت شد
+                          {query && (
+                            <>
+                              {' '}برای «<span className="font-medium">{query}</span>»
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        'محصولی یافت نشد'
+                      )}
+                    </p>
+                    
+                    {hasActiveFilters && (
+                      <button
+                        onClick={clearAllFilters}
+                        className="text-red-600 hover:text-red-700 text-sm mt-1"
+                      >
+                        پاک کردن همه فیلترها
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Results */}
+              {isLoading && results.length === 0 ? (
+                <div className="bg-white rounded-lg shadow-sm border p-12 text-center">
+                  <div className="w-12 h-12 border-4 border-gold border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                  <p className="text-gray-600">در حال جستجو...</p>
+                </div>
+              ) : results.length > 0 ? (
+                <>
+                  {/* Products Grid/List */}
+                  <div className={
+                    viewMode === 'grid' 
+                      ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'
+                      : 'space-y-4'
+                  }>
+                    {results.map(product => (
+                      <ProductCard 
+                        key={product.id} 
+                        product={product} 
+                        viewMode={viewMode}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Load More */}
+                  {hasMore && (
+                    <div className="text-center mt-8">
+                      <button
+                        onClick={loadMore}
+                        disabled={isLoading}
+                        className="px-8 py-3 bg-gold text-white rounded-lg hover:bg-gold/90 disabled:opacity-50 flex items-center gap-2 mx-auto"
+                      >
+                        {isLoading ? (
+                          <>
+                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            در حال بارگذاری...
+                          </>
+                        ) : (
+                          'مشاهده محصولات بیشتر'
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="bg-white rounded-lg shadow-sm border p-12 text-center">
+                  <div className="text-6xl text-gray-300 mb-4">🔍</div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">
+                    محصولی یافت نشد
+                  </h3>
+                  <p className="text-gray-600 mb-6">
+                    {query 
+                      ? `نتیجه‌ای برای "${query}" یافت نشد. لطفاً کلمات کلیدی دیگری امتحان کنید.`
+                      : 'هیچ محصولی با فیلترهای انتخابی یافت نشد.'
+                    }
+                  </p>
+                  {(query || hasActiveFilters) && (
+                    <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                      {query && (
+                        <button
+                          onClick={() => setQuery('')}
+                          className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:border-gray-400"
+                        >
+                          پاک کردن جستجو
+                        </button>
+                      )}
+                      {hasActiveFilters && (
+                        <button
+                          onClick={clearAllFilters}
+                          className="px-6 py-2 bg-gold text-white rounded-lg hover:bg-gold/90"
+                        >
+                          پاک کردن همه فیلترها
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
+
+// Simple Product Card Component (you can expand this)
+const ProductCard: React.FC<{ product: any; viewMode: 'grid' | 'list' }> = ({ 
+  product, 
+  viewMode 
+}) => {
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('fa-IR').format(price) + ' ریال';
+  };
+
+  if (viewMode === 'list') {
+    return (
+      <div className="bg-white rounded-lg shadow-sm border hover:shadow-md transition-shadow p-4">
+        <div className="flex gap-4">
+          <div className="w-24 h-24 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+            <img
+              src={product.image}
+              alt={product.name}
+              className="w-full h-full object-cover"
+            />
+          </div>
+          <div className="flex-1 text-right">
+            <h3 className="font-medium text-gray-900 mb-1 line-clamp-2">
+              {product.name}
+            </h3>
+            <p className="text-sm text-gray-600 mb-2">{product.brand}</p>
+            <div className="flex items-center justify-end gap-2 mb-2">
+              <span className="text-sm text-gray-500">
+                ({new Intl.NumberFormat('fa-IR').format(product.reviewCount)})
+              </span>
+              <div className="flex">
+                {[...Array(5)].map((_, i) => (
+                  <span
+                    key={i}
+                    className={`text-sm ${
+                      i < Math.floor(product.rating) 
+                        ? 'text-yellow-400' 
+                        : 'text-gray-300'
+                    }`}
+                  >
+                    ★
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="text-gold font-bold">
+              {formatPrice(product.price)}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm border hover:shadow-md transition-shadow">
+      <div className="aspect-square bg-gray-100 rounded-t-lg overflow-hidden">
+        <img
+          src={product.image}
+          alt={product.name}
+          className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+        />
+      </div>
+      <div className="p-4 text-right">
+        <h3 className="font-medium text-gray-900 mb-1 line-clamp-2">
+          {product.name}
+        </h3>
+        <p className="text-sm text-gray-600 mb-2">{product.brand}</p>
+        <div className="flex items-center justify-end gap-2 mb-3">
+          <span className="text-sm text-gray-500">
+            ({new Intl.NumberFormat('fa-IR').format(product.reviewCount)})
+          </span>
+          <div className="flex">
+            {[...Array(5)].map((_, i) => (
+              <span
+                key={i}
+                className={`text-sm ${
+                  i < Math.floor(product.rating) 
+                    ? 'text-yellow-400' 
+                    : 'text-gray-300'
+                }`}
+              >
+                ★
+              </span>
+            ))}

@@ -1,0 +1,333 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Import brand-specific styles */
+@import './brand.css';
+@import './animations.css';
+@import './rtl.css';
+
+/* Font Face Declarations */
+@font-face {
+  font-family: 'IranSans';
+  src: url('/fonts/IranSans-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IranSans';
+  src: url('/fonts/IranSans-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Vazir';
+  src: url('/fonts/Vazir-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Vazir';
+  src: url('/fonts/Vazir-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* CSS Custom Properties - Brand Colors */
+:root {
+  /* Alpha Store Brand Colors */
+  --alpha-black-50: #f8f8f8;
+  --alpha-black-100: #e8e8e8;
+  --alpha-black-200: #d0d0d0;
+  --alpha-black-300: #a8a8a8;
+  --alpha-black-400: #808080;
+  --alpha-black-500: #6a6a6a;
+  --alpha-black-600: #545454;
+  --alpha-black-700: #454545;
+  --alpha-black-800: #3c3c3c;
+  --alpha-black-900: #1a1a1a;
+  --alpha-black: #1a1a1a;
+  
+  --alpha-gold-50: #fefbf3;
+  --alpha-gold-100: #fdf6e3;
+  --alpha-gold-200: #faecc4;
+  --alpha-gold-300: #f5dc9a;
+  --alpha-gold-400: #eec86e;
+  --alpha-gold-500: #e5b649;
+  --alpha-gold-600: #d4af37;
+  --alpha-gold-700: #b8952e;
+  --alpha-gold-800: #94762a;
+  --alpha-gold-900: #7a6227;
+  --alpha-gold: #d4af37;
+  
+  --alpha-ivory-50: #ffffff;
+  --alpha-ivory-100: #fefefe;
+  --alpha-ivory-200: #fdfdfc;
+  --alpha-ivory-300: #fbfaf9;
+  --alpha-ivory-400: #f9f6f0;
+  --alpha-ivory-500: #f5f1e8;
+  --alpha-ivory-600: #e8dcc8;
+  --alpha-ivory-700: #d4c4a0;
+  --alpha-ivory-800: #b8a27c;
+  --alpha-ivory-900: #9d8862;
+  --alpha-ivory: #f9f6f0;
+  
+  --alpha-emerald-50: #ecfdf5;
+  --alpha-emerald-100: #d1fae5;
+  --alpha-emerald-200: #a7f3d0;
+  --alpha-emerald-300: #6ee7b7;
+  --alpha-emerald-400: #34d399;
+  --alpha-emerald-500: #10b981;
+  --alpha-emerald-600: #50c878;
+  --alpha-emerald-700: #047857;
+  --alpha-emerald-800: #065f46;
+  --alpha-emerald-900: #064e3b;
+  --alpha-emerald: #50c878;
+  
+  /* Font Variables */
+  --font-iranSans: 'IranSans', Tahoma, Arial, sans-serif;
+  --font-vazir: 'Vazir', Arial, Helvetica, sans-serif;
+  
+  /* Layout Variables */
+  --alpha-header-height: 80px;
+  --alpha-footer-height: 200px;
+  --alpha-container-max: 1200px;
+  --alpha-border-radius: 8px;
+  --alpha-border-radius-lg: 16px;
+  
+  /* Animation Variables */
+  --alpha-transition-fast: 0.15s ease-out;
+  --alpha-transition-normal: 0.3s ease-out;
+  --alpha-transition-slow: 0.5s ease-out;
+}
+
+/* Dark mode color adjustments */
+[data-theme="dark"] {
+  --alpha-ivory: #2d2d2d;
+  --alpha-ivory-100: #3a3a3a;
+  --alpha-ivory-200: #474747;
+}
+
+/* Base Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  -moz-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--font-iranSans);
+  background-color: var(--alpha-ivory);
+  color: var(--alpha-black);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Remove default button styles */
+button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* Remove default input styles */
+input, textarea, select {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+/* Remove default link styles */
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Focus styles for accessibility */
+:focus {
+  outline: 2px solid var(--alpha-gold);
+  outline-offset: 2px;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Selection styles */
+::selection {
+  background-color: var(--alpha-gold);
+  color: var(--alpha-black);
+}
+
+::-moz-selection {
+  background-color: var(--alpha-gold);
+  color: var(--alpha-black);
+}
+
+/* Scrollbar styles */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--alpha-ivory-200);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--alpha-gold);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--alpha-gold-700);
+}
+
+/* Print styles */
+@media print {
+  * {
+    background: transparent !important;
+    color: black !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+  
+  body {
+    font-size: 12pt;
+    line-height: 1.4;
+  }
+  
+  .alpha-no-print {
+    display: none !important;
+  }
+}
+
+/* Reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  :root {
+    --alpha-black: #000000;
+    --alpha-ivory: #ffffff;
+    --alpha-gold: #cc9900;
+  }
+}
+
+/* Utility Classes */
+.alpha-container {
+  max-width: var(--alpha-container-max);
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.alpha-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.alpha-skip-link {
+  position: absolute;
+  top: -40px;
+  left: 6px;
+  background: var(--alpha-black);
+  color: var(--alpha-ivory);
+  padding: 8px;
+  text-decoration: none;
+  border-radius: 4px;
+  z-index: 9999;
+}
+
+.alpha-skip-link:focus {
+  top: 6px;
+}
+
+/* Loading states */
+.alpha-loading {
+  position: relative;
+  overflow: hidden;
+}
+
+.alpha-loading::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.4),
+    transparent
+  );
+  animation: alpha-shimmer 1.5s infinite;
+}
+
+@keyframes alpha-shimmer {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+/* Error states */
+.alpha-error {
+  background-color: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  border-radius: var(--alpha-border-radius);
+  padding: 1rem;
+}
+
+/* Success states */
+.alpha-success {
+  background-color: #dcfce7;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+  border-radius: var(--alpha-border-radius);
+  padding: 1rem;
+}
+
+/* Warning states */
+.alpha-warning {
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  border-radius: var(--alpha-border-radius);
+  padding: 1rem;
+}

@@ -1,0 +1,768 @@
+# =================================================================
+# Prometheus Configuration (monitoring/prometheus.yml)
+# =================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "alerting-rules.yml"
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'alpha-store-frontend'
+    static_configs:
+      - targets: ['frontend:3000']
+    metrics_path: '/api/metrics'
+    scrape_interval: 30s
+
+  - job_name: 'alpha-store-backend'
+    static_configs:
+      - targets: ['backend:4000']
+    metrics_path: '/api/metrics'
+    scrape_interval: 30s
+
+  - job_name: 'alpha-store-nginx'
+    static_configs:
+      - targets: ['nginx:80']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['host.docker.internal:9100']
+
+  - job_name: 'mongodb'
+    static_configs:
+      - targets: ['mongodb:27017']
+    metrics_path: '/metrics'
+
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    metrics_path: '/metrics'
+
+# =================================================================
+# Alerting Rules (monitoring/alerting-rules.yml)
+# =================================================================
+
+groups:
+  - name: alpha-store-alerts
+    rules:
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is above 80% for more than 5 minutes"
+
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is above 80% for more than 5 minutes"
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100 < 10
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space is below 10%"
+
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service is down"
+          description: "{{ $labels.job }} service is down"
+
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High response time"
+          description: "95th percentile response time is above 2 seconds"
+
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate"
+          description: "Error rate is above 10%"
+
+      - alert: SSLCertificateExpiry
+        expr: (ssl_certificate_expiry - time()) / 86400 < 30
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "SSL certificate expiring soon"
+          description: "SSL certificate expires in less than 30 days"
+
+      - alert: DatabaseConnectionFailed
+        expr: mongodb_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database connection failed"
+          description: "Cannot connect to MongoDB"
+
+      - alert: RedisConnectionFailed
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis connection failed"
+          description: "Cannot connect to Redis"
+
+# =================================================================
+# Production Environment Variables (.env.production)
+# =================================================================
+
+# Application
+NODE_ENV=production
+DOMAIN=alphastore.ir
+PORT=4000
+FRONTEND_URL=https://alphastore.ir
+ADMIN_URL=https://admin.alphastore.ir
+API_URL=https://api.alphastore.ir
+
+# Security
+JWT_SECRET=your_super_secure_jwt_secret_here_minimum_32_chars
+ENCRYPTION_KEY=your_32_character_encryption_key_here
+SESSION_SECRET=your_session_secret_here_minimum_32_chars
+CSRF_SECRET=your_csrf_secret_here_minimum_32_chars
+
+# Database
+MONGODB_URI=mongodb://mongodb:27017/alphastore_prod
+MONGODB_ROOT_USERNAME=root
+MONGODB_ROOT_PASSWORD=your_mongodb_root_password_here
+MONGODB_USERNAME=alphastore
+MONGODB_PASSWORD=your_mongodb_password_here
+
+# Redis
+REDIS_URL=redis://redis:6379
+REDIS_PASSWORD=your_redis_password_here
+
+# Payment Gateway (Iranian)
+ZARINPAL_MERCHANT_ID=your_zarinpal_merchant_id
+MELLAT_TERMINAL_ID=your_mellat_terminal_id
+MELLAT_USERNAME=your_mellat_username
+MELLAT_PASSWORD=your_mellat_password
+SAMAN_MERCHANT_ID=your_saman_merchant_id
+
+# SMS Service (Iranian)
+KAVENEGAR_API_KEY=your_kavenegar_api_key
+SMS_IR_API_KEY=your_sms_ir_api_key
+SMS_SERVICE=kavenegar
+
+# Email Service
+EMAIL_FROM=noreply@alphastore.ir
+EMAIL_NAME=Alpha Store
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your_email@gmail.com
+SMTP_PASS=your_email_password
+
+# File Storage
+UPLOAD_DIR=/app/uploads
+MAX_FILE_SIZE=10485760
+ALLOWED_FILE_TYPES=jpg,jpeg,png,gif,pdf,doc,docx
+
+# CDN (if using)
+CDN_URL=https://cdn.alphastore.ir
+CDN_ACCESS_KEY=your_cdn_access_key
+CDN_SECRET_KEY=your_cdn_secret_key
+
+# Monitoring
+GRAFANA_ADMIN_PASSWORD=your_grafana_admin_password
+PROMETHEUS_RETENTION=30d
+
+# Backup
+BACKUP_ENCRYPTION_KEY=your_backup_encryption_key
+BACKUP_SCHEDULE="0 2 * * *"
+BACKUP_RETENTION_DAYS=30
+
+# Rate Limiting
+RATE_LIMIT_GENERAL=100
+RATE_LIMIT_AUTH=5
+RATE_LIMIT_API=200
+RATE_LIMIT_WINDOW=900
+
+# Security Headers
+HSTS_MAX_AGE=31536000
+CSP_REPORT_URI=https://api.alphastore.ir/security/csp-report
+
+# =================================================================
+# Production Configuration (config/production.js)
+# =================================================================
+
+module.exports = {
+  // Application settings
+  app: {
+    name: 'Alpha Store',
+    version: '1.0.0',
+    domain: process.env.DOMAIN || 'alphastore.ir',
+    port: process.env.PORT || 4000,
+    env: 'production',
+    timezone: 'Asia/Tehran',
+    locale: 'fa-IR',
+    currency: 'IRR'
+  },
+
+  // Database configuration
+  database: {
+    mongodb: {
+      uri: process.env.MONGODB_URI,
+      options: {
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
+        maxPoolSize: 20,
+        minPoolSize: 5,
+        maxIdleTimeMS: 30000,
+        serverSelectionTimeoutMS: 5000,
+        socketTimeoutMS: 45000,
+        bufferMaxEntries: 0,
+        bufferCommands: false,
+        authSource: 'admin'
+      }
+    },
+    redis: {
+      url: process.env.REDIS_URL,
+      options: {
+        password: process.env.REDIS_PASSWORD,
+        connectTimeout: 5000,
+        commandTimeout: 5000,
+        retryDelayOnFailover: 100,
+        enableReadyCheck: true,
+        maxRetriesPerRequest: 3,
+        lazyConnect: true
+      }
+    }
+  },
+
+  // Security configuration
+  security: {
+    jwt: {
+      secret: process.env.JWT_SECRET,
+      expiresIn: '24h',
+      algorithm: 'HS256'
+    },
+    encryption: {
+      key: process.env.ENCRYPTION_KEY,
+      algorithm: 'aes-256-gcm'
+    },
+    session: {
+      secret: process.env.SESSION_SECRET,
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        secure: true,
+        httpOnly: true,
+        maxAge: 86400000, // 24 hours
+        sameSite: 'strict'
+      },
+      store: 'redis'
+    },
+    csrf: {
+      secret: process.env.CSRF_SECRET,
+      cookie: {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'strict'
+      }
+    },
+    cors: {
+      origin: [
+        'https://alphastore.ir',
+        'https://www.alphastore.ir',
+        'https://admin.alphastore.ir'
+      ],
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-CSRF-Token']
+    },
+    rateLimit: {
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 100, // requests per window
+      standardHeaders: true,
+      legacyHeaders: false,
+      skipSuccessfulRequests: false,
+      skipFailedRequests: false
+    },
+    helmet: {
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.jsdelivr.net"],
+          styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+          fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+          imgSrc: ["'self'", "data:", "https:", "blob:"],
+          connectSrc: ["'self'", "https://api.alphastore.ir", "wss://alphastore.ir"],
+          frameSrc: ["'none'"],
+          objectSrc: ["'none'"],
+          baseUri: ["'self'"],
+          formAction: ["'self'"],
+          upgradeInsecureRequests: []
+        }
+      },
+      hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true
+      }
+    }
+  },
+
+  // Payment gateway configuration (Iranian)
+  payment: {
+    zarinpal: {
+      merchantId: process.env.ZARINPAL_MERCHANT_ID,
+      sandbox: false,
+      callbackUrl: `https://${process.env.DOMAIN}/payment/callback/zarinpal`
+    },
+    mellat: {
+      terminalId: process.env.MELLAT_TERMINAL_ID,
+      username: process.env.MELLAT_USERNAME,
+      password: process.env.MELLAT_PASSWORD,
+      callbackUrl: `https://${process.env.DOMAIN}/payment/callback/mellat`
+    },
+    saman: {
+      merchantId: process.env.SAMAN_MERCHANT_ID,
+      callbackUrl: `https://${process.env.DOMAIN}/payment/callback/saman`
+    }
+  },
+
+  // SMS service configuration
+  sms: {
+    provider: process.env.SMS_SERVICE || 'kavenegar',
+    kavenegar: {
+      apiKey: process.env.KAVENEGAR_API_KEY,
+      sender: '10008663'
+    },
+    smsir: {
+      apiKey: process.env.SMS_IR_API_KEY,
+      secretKey: process.env.SMS_IR_SECRET_KEY,
+      sender: 'alphastore'
+    }
+  },
+
+  // Email configuration
+  email: {
+    from: process.env.EMAIL_FROM,
+    name: process.env.EMAIL_NAME,
+    smtp: {
+      host: process.env.SMTP_HOST,
+      port: process.env.SMTP_PORT,
+      secure: process.env.SMTP_PORT == 465,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
+      }
+    }
+  },
+
+  // File upload configuration
+  upload: {
+    directory: process.env.UPLOAD_DIR || '/app/uploads',
+    maxFileSize: parseInt(process.env.MAX_FILE_SIZE) || 10485760, // 10MB
+    allowedTypes: (process.env.ALLOWED_FILE_TYPES || 'jpg,jpeg,png,gif,pdf').split(','),
+    imageResize: {
+      thumbnail: { width: 150, height: 150 },
+      medium: { width: 500, height: 500 },
+      large: { width: 1200, height: 1200 }
+    }
+  },
+
+  // Caching configuration
+  cache: {
+    redis: {
+      ttl: 3600, // 1 hour default
+      keyPrefix: 'alpha_store:',
+      pages: {
+        home: 300, // 5 minutes
+        product: 600, // 10 minutes
+        category: 900 // 15 minutes
+      }
+    }
+  },
+
+  // Logging configuration
+  logging: {
+    level: 'info',
+    format: 'json',
+    directory: '/app/logs',
+    maxFiles: 30,
+    maxSize: '10m',
+    compress: true,
+    colorize: false,
+    timestamp: true,
+    exceptions: {
+      handleUncaughtException: true,
+      handleUnhandledRejection: true
+    }
+  },
+
+  // Performance monitoring
+  monitoring: {
+    prometheus: {
+      enabled: true,
+      port: 9464,
+      endpoint: '/metrics'
+    },
+    healthCheck: {
+      endpoint: '/api/health',
+      timeout: 5000
+    },
+    metrics: {
+      requestDuration: true,
+      requestCount: true,
+      errorCount: true,
+      activeConnections: true,
+      memoryUsage: true,
+      cpuUsage: true
+    }
+  },
+
+  // Persian/Iranian specific settings
+  persian: {
+    calendar: 'jalali',
+    numbers: 'persian',
+    currency: {
+      symbol: 'ریال',
+      code: 'IRR',
+      format: 'fa-IR'
+    },
+    rtl: true,
+    fonts: ['IRANSans', 'Vazir', 'Sahel']
+  },
+
+  // SEO and meta configuration
+  seo: {
+    siteName: 'فروشگاه آلفا استور',
+    description: 'فروشگاه آنلاین آلفا استور - خرید آسان و امن',
+    keywords: 'فروشگاه آنلاین, خرید اینترنتی, آلفا استور',
+    author: 'Alpha Store Team',
+    robots: 'index, follow',
+    canonical: `https://${process.env.DOMAIN}`,
+    ogImage: `https://${process.env.DOMAIN}/images/og-image.jpg`
+  }
+};
+
+# =================================================================
+# Backup Script (scripts/backup.sh)
+# =================================================================
+
+#!/bin/bash
+# Alpha Store Backup Script
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+BACKUP_DIR="/backups/alpha-store"
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+RETENTION_DAYS=30
+
+# Color codes
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+log() {
+    echo -e "${BLUE}[$(date +'%Y-%m-%d %H:%M:%S')] $1${NC}"
+}
+
+error() {
+    echo -e "${RED}[ERROR] $1${NC}" >&2
+}
+
+success() {
+    echo -e "${GREEN}[SUCCESS] $1${NC}"
+}
+
+# Create backup directories
+create_directories() {
+    mkdir -p "$BACKUP_DIR"/{database,files,config,logs}
+    log "Backup directories created"
+}
+
+# Backup MongoDB
+backup_database() {
+    log "Starting database backup..."
+    
+    local backup_path="$BACKUP_DIR/database/mongodb_$TIMESTAMP"
+    mkdir -p "$backup_path"
+    
+    if docker exec alpha-store-mongodb mongodump \
+        --username="$MONGODB_USERNAME" \
+        --password="$MONGODB_PASSWORD" \
+        --authenticationDatabase=admin \
+        --db=alphastore_prod \
+        --out="/data/backups/temp_$TIMESTAMP" 2>/dev/null; then
+        
+        # Copy from container to host
+        docker cp "alpha-store-mongodb:/data/backups/temp_$TIMESTAMP" "$backup_path"
+        
+        # Compress backup
+        tar -czf "$backup_path.tar.gz" -C "$BACKUP_DIR/database" "mongodb_$TIMESTAMP"
+        rm -rf "$backup_path"
+        
+        # Cleanup container
+        docker exec alpha-store-mongodb rm -rf "/data/backups/temp_$TIMESTAMP"
+        
+        success "Database backup completed: mongodb_$TIMESTAMP.tar.gz"
+    else
+        error "Database backup failed"
+        return 1
+    fi
+}
+
+# Backup Redis
+backup_redis() {
+    log "Starting Redis backup..."
+    
+    local backup_path="$BACKUP_DIR/database/redis_$TIMESTAMP.rdb"
+    
+    if docker exec alpha-store-redis redis-cli --rdb "$backup_path" BGSAVE; then
+        # Wait for backup to complete
+        sleep 5
+        docker cp "alpha-store-redis:$backup_path" "$BACKUP_DIR/database/"
+        docker exec alpha-store-redis rm "$backup_path"
+        
+        success "Redis backup completed: redis_$TIMESTAMP.rdb"
+    else
+        error "Redis backup failed"
+        return 1
+    fi
+}
+
+# Backup uploaded files
+backup_files() {
+    log "Starting files backup..."
+    
+    if [ -d "$PROJECT_ROOT/uploads" ]; then
+        tar -czf "$BACKUP_DIR/files/uploads_$TIMESTAMP.tar.gz" \
+            -C "$PROJECT_ROOT" uploads
+        success "Files backup completed: uploads_$TIMESTAMP.tar.gz"
+    else
+        log "No uploads directory found, skipping files backup"
+    fi
+}
+
+# Backup configuration
+backup_config() {
+    log "Starting configuration backup..."
+    
+    tar -czf "$BACKUP_DIR/config/config_$TIMESTAMP.tar.gz" \
+        -C "$PROJECT_ROOT" \
+        .env.production \
+        config/ \
+        docker-compose.prod.yml \
+        nginx/ \
+        scripts/ \
+        security/ 2>/dev/null || true
+    
+    success "Configuration backup completed: config_$TIMESTAMP.tar.gz"
+}
+
+# Backup logs
+backup_logs() {
+    log "Starting logs backup..."
+    
+    if [ -d "$PROJECT_ROOT/logs" ]; then
+        tar -czf "$BACKUP_DIR/logs/logs_$TIMESTAMP.tar.gz" \
+            -C "$PROJECT_ROOT" logs
+        success "Logs backup completed: logs_$TIMESTAMP.tar.gz"
+    else
+        log "No logs directory found, skipping logs backup"
+    fi
+}
+
+# Cleanup old backups
+cleanup_old_backups() {
+    log "Cleaning up old backups (older than $RETENTION_DAYS days)..."
+    
+    find "$BACKUP_DIR" -name "*.tar.gz" -mtime +$RETENTION_DAYS -delete 2>/dev/null || true
+    find "$BACKUP_DIR" -name "*.rdb" -mtime +$RETENTION_DAYS -delete 2>/dev/null || true
+    
+    success "Old backups cleaned up"
+}
+
+# Create backup manifest
+create_manifest() {
+    local manifest_file="$BACKUP_DIR/backup_manifest_$TIMESTAMP.txt"
+    
+    cat > "$manifest_file" << EOF
+Alpha Store Backup Manifest
+==========================
+Backup Date: $(date)
+Timestamp: $TIMESTAMP
+Server: $(hostname)
+Docker Compose: $(docker-compose version --short 2>/dev/null || echo "Unknown")
+
+Files Backed Up:
+EOF
+    
+    find "$BACKUP_DIR" -name "*$TIMESTAMP*" -type f >> "$manifest_file"
+    
+    log "Backup manifest created: backup_manifest_$TIMESTAMP.txt"
+}
+
+# Verify backups
+verify_backups() {
+    log "Verifying backup integrity..."
+    
+    local failed=0
+    
+    # Check database backup
+    if [ -f "$BACKUP_DIR/database/mongodb_$TIMESTAMP.tar.gz" ]; then
+        if tar -tzf "$BACKUP_DIR/database/mongodb_$TIMESTAMP.tar.gz" >/dev/null 2>&1; then
+            log "✓ MongoDB backup verification passed"
+        else
+            error "✗ MongoDB backup verification failed"
+            ((failed++))
+        fi
+    fi
+    
+    # Check Redis backup
+    if [ -f "$BACKUP_DIR/database/redis_$TIMESTAMP.rdb" ]; then
+        if file "$BACKUP_DIR/database/redis_$TIMESTAMP.rdb" | grep -q "Redis"; then
+            log "✓ Redis backup verification passed"
+        else
+            error "✗ Redis backup verification failed"
+            ((failed++))
+        fi
+    fi
+    
+    # Check files backup
+    if [ -f "$BACKUP_DIR/files/uploads_$TIMESTAMP.tar.gz" ]; then
+        if tar -tzf "$BACKUP_DIR/files/uploads_$TIMESTAMP.tar.gz" >/dev/null 2>&1; then
+            log "✓ Files backup verification passed"
+        else
+            error "✗ Files backup verification failed"
+            ((failed++))
+        fi
+    fi
+    
+    # Check config backup
+    if [ -f "$BACKUP_DIR/config/config_$TIMESTAMP.tar.gz" ]; then
+        if tar -tzf "$BACKUP_DIR/config/config_$TIMESTAMP.tar.gz" >/dev/null 2>&1; then
+            log "✓ Configuration backup verification passed"
+        else
+            error "✗ Configuration backup verification failed"
+            ((failed++))
+        fi
+    fi
+    
+    if [ $failed -eq 0 ]; then
+        success "All backup verifications passed"
+    else
+        error "$failed backup verification(s) failed"
+        return 1
+    fi
+}
+
+# Send notification
+send_notification() {
+    local status=$1
+    local message="Alpha Store backup completed successfully at $(date)"
+    
+    if [ "$status" != "success" ]; then
+        message="Alpha Store backup failed at $(date)"
+    fi
+    
+    # Send email notification (if configured)
+    if command -v mail &> /dev/null && [ -n "${ADMIN_EMAIL:-}" ]; then
+        echo "$message" | mail -s "Alpha Store Backup Notification" "$ADMIN_EMAIL"
+    fi
+    
+    # Log to system log
+    logger -t alpha-store-backup "$message"
+}
+
+# Main backup function
+main() {
+    log "Starting Alpha Store backup process..."
+    
+    local failed=0
+    
+    create_directories
+    
+    backup_database || ((failed++))
+    backup_redis || ((failed++))
+    backup_files || ((failed++))
+    backup_config || ((failed++))
+    backup_logs || ((failed++))
+    
+    if [ $failed -eq 0 ]; then
+        verify_backups || ((failed++))
+        create_manifest
+        cleanup_old_backups
+        
+        if [ $failed -eq 0 ]; then
+            success "Backup process completed successfully!"
+            send_notification "success"
+        else
+            error "Backup verification failed"
+            send_notification "failed"
+        fi
+    else
+        error "Backup process failed with $failed error(s)"
+        send_notification "failed"
+    fi
+    
+    log "Backup process finished"
+    return $failed
+}
+
+# Parse command line arguments
+case "${1:-backup}" in
+    "backup")
+        main
+        ;;
+    "database")
+        create_directories
+        backup_database
+        backup_redis
+        ;;
+    "files")
+        create_directories
+        backup_files
+        ;;
+    "config")
+        create_directories
+        backup_config
+        ;;
+    "verify")
+        TIMESTAMP="${2:-$(date +"%Y%m%d_%H%M%S")}"
+        verify_backups
+        ;;
+    "cleanup")
+        cleanup_old_backups
+        ;;
+    *)
+        echo "Usage: $0 {backup|database|files|config|verify|cleanup}"
+        exit 1
+        ;;
+esac

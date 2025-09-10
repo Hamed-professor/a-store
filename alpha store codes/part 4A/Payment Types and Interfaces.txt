@@ -1,0 +1,223 @@
+// src/types/payment.ts
+export interface PaymentGateway {
+  id: string;
+  name: string;
+  namePersian: string;
+  logo: string;
+  isAvailable: boolean;
+  processingFee: number;
+  supportedCurrencies: string[];
+  description: string;
+  descriptionPersian: string;
+}
+
+export interface PaymentRequest {
+  orderId: string;
+  userId: string;
+  amount: number;
+  currency: 'IRR' | 'IRT'; // Iranian Rial or Toman
+  description: string;
+  descriptionPersian: string;
+  callbackUrl: string;
+  gateway: PaymentGateway['id'];
+  metadata?: Record<string, any>;
+}
+
+export interface PaymentResponse {
+  success: boolean;
+  gatewayId: string;
+  transactionId?: string;
+  paymentUrl?: string;
+  authority?: string;
+  token?: string;
+  message: string;
+  messagePersian: string;
+  errorCode?: string;
+}
+
+export interface PaymentVerification {
+  success: boolean;
+  transactionId: string;
+  orderId: string;
+  amount: number;
+  currency: string;
+  gatewayId: string;
+  authority: string;
+  refId?: string;
+  cardPan?: string;
+  message: string;
+  messagePersian: string;
+  verifiedAt: Date;
+}
+
+export enum PaymentStatus {
+  PENDING = 'pending',
+  PROCESSING = 'processing',
+  COMPLETED = 'completed',
+  FAILED = 'failed',
+  CANCELLED = 'cancelled',
+  REFUNDED = 'refunded',
+  EXPIRED = 'expired'
+}
+
+export interface PaymentLog {
+  id: string;
+  orderId: string;
+  userId: string;
+  gatewayId: string;
+  transactionId?: string;
+  authority?: string;
+  amount: number;
+  currency: string;
+  status: PaymentStatus;
+  requestData: any;
+  responseData: any;
+  errorMessage?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ZarinPalRequest {
+  merchant_id: string;
+  amount: number;
+  currency: string;
+  description: string;
+  callback_url: string;
+  metadata?: {
+    mobile?: string;
+    email?: string;
+    order_id?: string;
+  };
+}
+
+export interface ZarinPalResponse {
+  data?: {
+    code: number;
+    message: string;
+    authority: string;
+    fee_type: string;
+    fee: number;
+  };
+  errors?: {
+    code: number;
+    message: string;
+    validations: string[];
+  };
+}
+
+export interface ZarinPalVerifyRequest {
+  merchant_id: string;
+  amount: number;
+  authority: string;
+}
+
+export interface ZarinPalVerifyResponse {
+  data?: {
+    code: number;
+    message: string;
+    card_hash: string;
+    card_pan: string;
+    ref_id: number;
+    fee_type: string;
+    fee: number;
+  };
+  errors?: {
+    code: number;
+    message: string;
+    validations: string[];
+  };
+}
+
+export interface PayIrRequest {
+  api: string;
+  amount: number;
+  redirect: string;
+  mobile?: string;
+  factorNumber?: string;
+  description?: string;
+}
+
+export interface PayIrResponse {
+  status: number;
+  token?: string;
+  errorMessage?: string;
+}
+
+export interface PayIrVerifyRequest {
+  api: string;
+  token: string;
+}
+
+export interface PayIrVerifyResponse {
+  status: number;
+  amount?: number;
+  transId?: string;
+  factorNumber?: string;
+  mobile?: string;
+  description?: string;
+  cardNumber?: string;
+  traceNumber?: string;
+  errorMessage?: string;
+}
+
+export interface NextPayRequest {
+  api_key: string;
+  amount: number;
+  order_id: string;
+  callback_uri: string;
+  customer_phone?: string;
+  custom_json_fields?: any;
+}
+
+export interface NextPayResponse {
+  code: number;
+  trans_id?: string;
+  error_desc?: string;
+}
+
+export interface NextPayVerifyRequest {
+  api_key: string;
+  amount: number;
+  trans_id: string;
+}
+
+export interface NextPayVerifyResponse {
+  code: number;
+  amount?: number;
+  order_id?: string;
+  card_holder?: string;
+  customer_phone?: string;
+  Shaparak_Ref_Id?: string;
+  custom_json_fields?: any;
+  error_desc?: string;
+}
+
+export interface PaymentFormData {
+  gateway: string;
+  amount: number;
+  currency: 'IRR' | 'IRT';
+  email?: string;
+  mobile?: string;
+  acceptTerms: boolean;
+}
+
+export interface PaymentError {
+  code: string;
+  message: string;
+  messagePersian: string;
+  details?: any;
+  retryable: boolean;
+}
+
+export const PAYMENT_ERROR_CODES = {
+  NETWORK_ERROR: 'NETWORK_ERROR',
+  GATEWAY_ERROR: 'GATEWAY_ERROR',
+  INVALID_AMOUNT: 'INVALID_AMOUNT',
+  INVALID_MERCHANT: 'INVALID_MERCHANT',
+  PAYMENT_CANCELLED: 'PAYMENT_CANCELLED',
+  PAYMENT_EXPIRED: 'PAYMENT_EXPIRED',
+  VERIFICATION_FAILED: 'VERIFICATION_FAILED',
+  INSUFFICIENT_FUNDS: 'INSUFFICIENT_FUNDS',
+  INVALID_CARD: 'INVALID_CARD',
+  UNKNOWN_ERROR: 'UNKNOWN_ERROR'
+} as const;

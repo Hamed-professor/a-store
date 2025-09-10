@@ -1,0 +1,237 @@
+# =================================================================
+# Frontend Dockerfile (docker/Dockerfile.frontend)
+# =================================================================
+
+# Multi-stage build for Next.js production
+FROM node:18-alpine AS base
+WORKDIR /app
+
+# Install dependencies only when needed
+FROM base AS deps
+RUN apk add --no-cache libc6-compat
+COPY package.json package-lock.json ./
+RUN npm ci --only=production && npm cache clean --force
+
+# Rebuild the source code only when needed
+FROM base AS builder
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+# Build Next.js application
+ENV NEXT_TELEMETRY_DISABLED 1
+ENV NODE_ENV production
+
+RUN npm run build
+
+# Production image, copy all the files and run next
+FROM base AS runner
+
+# Create non-root user
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+# Copy necessary files
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+
+# Set proper permissions
+RUN mkdir -p /app/logs
+RUN chown -R nextjs:nodejs /app
+
+# Security hardening
+RUN apk add --no-cache dumb-init curl
+USER nextjs
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3000/api/health || exit 1
+
+EXPOSE 3000
+
+ENV PORT 3000
+ENV HOSTNAME "0.0.0.0"
+ENV NEXT_TELEMETRY_DISABLED 1
+
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["node", "server.js"]
+
+# =================================================================
+# Backend Dockerfile (docker/Dockerfile.backend)
+# =================================================================
+
+FROM node:18-alpine AS base
+
+# Security updates and tools
+RUN apk update && apk upgrade
+RUN apk add --no-cache dumb-init curl
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nodejs -u 1001
+
+WORKDIR /app
+
+# Install dependencies
+FROM base AS deps
+COPY package.json package-lock.json ./
+RUN npm ci --only=production && npm cache clean --force
+
+# Copy source code
+FROM base AS runner
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+# Create necessary directories
+RUN mkdir -p /app/logs /app/uploads /app/temp
+RUN chown -R nodejs:nodejs /app
+
+# Security hardening
+USER nodejs
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:4000/api/health || exit 1
+
+EXPOSE 4000
+
+ENV NODE_ENV production
+ENV PORT 4000
+
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["node", "server.js"]
+
+# =================================================================
+# Nginx Dockerfile (docker/Dockerfile.nginx)
+# =================================================================
+
+FROM nginx:1.24-alpine
+
+# Security updates
+RUN apk update && apk upgrade
+
+# Install additional tools
+RUN apk add --no-cache curl openssl
+
+# Remove default config
+RUN rm /etc/nginx/conf.d/default.conf
+
+# Copy custom configurations
+COPY nginx/nginx.conf /etc/nginx/nginx.conf
+COPY nginx/sites-available/ /etc/nginx/sites-available/
+COPY nginx/ssl/ /etc/nginx/ssl/
+COPY nginx/security/ /etc/nginx/security/
+
+# Create necessary directories
+RUN mkdir -p /var/log/nginx /var/www/html /var/cache/nginx
+
+# Set proper permissions
+RUN chown -R nginx:nginx /var/log/nginx /var/cache/nginx
+RUN chmod 755 /var/log/nginx
+
+# Security hardening - remove unnecessary packages
+RUN apk del --purge wget
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:80/health || exit 1
+
+EXPOSE 80 443
+
+# Use nginx user
+USER nginx
+
+CMD ["nginx", "-g", "daemon off;"]
+
+# =================================================================
+# .dockerignore
+# =================================================================
+
+# Node modules
+node_modules
+npm-debug.log*
+
+# Next.js build output
+.next
+out
+
+# Production build
+build
+dist
+
+# Environment files
+.env
+.env.local
+.env.development
+.env.test
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage
+
+# nyc test coverage
+.nyc_output
+
+# Dependency directories
+jspm_packages
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# parcel-bundler cache (https://parceljs.org/)
+.cache
+.parcel-cache
+
+# Stores VSCode versions used for testing VSCode extensions
+.vscode-test
+
+# Temporary folders
+tmp/
+temp/
+
+# Documentation
+README.md
+CHANGELOG.md
+
+# Docker files
+Dockerfile
+docker-compose*.yml

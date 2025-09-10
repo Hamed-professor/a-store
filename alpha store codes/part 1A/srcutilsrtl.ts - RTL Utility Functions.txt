@@ -1,0 +1,401 @@
+/**
+ * Α Store RTL (Right-to-Left) Utility Functions
+ * Provides utilities for RTL language support and layout management
+ */
+
+// RTL Languages
+export const RTL_LANGUAGES = ['fa', 'ar', 'he', 'ur', 'ps', 'ku'] as const;
+export const LTR_LANGUAGES = ['en', 'fr', 'de', 'es', 'it', 'pt', 'ru'] as const;
+
+export type RTLLanguage = typeof RTL_LANGUAGES[number];
+export type LTRLanguage = typeof LTR_LANGUAGES[number];
+export type Language = RTLLanguage | LTRLanguage;
+export type Direction = 'ltr' | 'rtl';
+
+/**
+ * Check if a language code is RTL
+ */
+export function isRTLLanguage(language: string): language is RTLLanguage {
+  return RTL_LANGUAGES.includes(language as RTLLanguage);
+}
+
+/**
+ * Get text direction from language code
+ */
+export function getDirectionFromLanguage(language: string): Direction {
+  return isRTLLanguage(language) ? 'rtl' : 'ltr';
+}
+
+/**
+ * Get current document direction
+ */
+export function getCurrentDirection(): Direction {
+  if (typeof document === 'undefined') return 'ltr';
+  return document.documentElement.dir as Direction || 'ltr';
+}
+
+/**
+ * Set document direction
+ */
+export function setDocumentDirection(direction: Direction): void {
+  if (typeof document === 'undefined') return;
+  document.documentElement.dir = direction;
+  document.documentElement.setAttribute('data-direction', direction);
+}
+
+/**
+ * Toggle document direction
+ */
+export function toggleDirection(): Direction {
+  const currentDir = getCurrentDirection();
+  const newDir = currentDir === 'rtl' ? 'ltr' : 'rtl';
+  setDocumentDirection(newDir);
+  return newDir;
+}
+
+/**
+ * Get RTL-aware CSS properties
+ */
+export interface RTLAwareProps {
+  marginStart?: string;
+  marginEnd?: string;
+  paddingStart?: string;
+  paddingEnd?: string;
+  borderStartWidth?: string;
+  borderEndWidth?: string;
+  borderStartColor?: string;
+  borderEndColor?: string;
+  insetStart?: string;
+  insetEnd?: string;
+  textAlign?: 'start' | 'end' | 'center';
+}
+
+/**
+ * Convert RTL-aware props to CSS properties
+ */
+export function rtlAwareProps(props: RTLAwareProps, direction?: Direction): Record<string, string> {
+  const dir = direction || getCurrentDirection();
+  const isRTL = dir === 'rtl';
+  
+  const cssProps: Record<string, string> = {};
+  
+  // Margin
+  if (props.marginStart !== undefined) {
+    cssProps[isRTL ? 'marginRight' : 'marginLeft'] = props.marginStart;
+  }
+  if (props.marginEnd !== undefined) {
+    cssProps[isRTL ? 'marginLeft' : 'marginRight'] = props.marginEnd;
+  }
+  
+  // Padding
+  if (props.paddingStart !== undefined) {
+    cssProps[isRTL ? 'paddingRight' : 'paddingLeft'] = props.paddingStart;
+  }
+  if (props.paddingEnd !== undefined) {
+    cssProps[isRTL ? 'paddingLeft' : 'paddingRight'] = props.paddingEnd;
+  }
+  
+  // Border
+  if (props.borderStartWidth !== undefined) {
+    cssProps[isRTL ? 'borderRightWidth' : 'borderLeftWidth'] = props.borderStartWidth;
+  }
+  if (props.borderEndWidth !== undefined) {
+    cssProps[isRTL ? 'borderLeftWidth' : 'borderRightWidth'] = props.borderEndWidth;
+  }
+  if (props.borderStartColor !== undefined) {
+    cssProps[isRTL ? 'borderRightColor' : 'borderLeftColor'] = props.borderStartColor;
+  }
+  if (props.borderEndColor !== undefined) {
+    cssProps[isRTL ? 'borderLeftColor' : 'borderRightColor'] = props.borderEndColor;
+  }
+  
+  // Position
+  if (props.insetStart !== undefined) {
+    cssProps[isRTL ? 'right' : 'left'] = props.insetStart;
+  }
+  if (props.insetEnd !== undefined) {
+    cssProps[isRTL ? 'left' : 'right'] = props.insetEnd;
+  }
+  
+  // Text align
+  if (props.textAlign === 'start') {
+    cssProps.textAlign = isRTL ? 'right' : 'left';
+  } else if (props.textAlign === 'end') {
+    cssProps.textAlign = isRTL ? 'left' : 'right';
+  } else if (props.textAlign === 'center') {
+    cssProps.textAlign = 'center';
+  }
+  
+  return cssProps;
+}
+
+/**
+ * Get RTL-aware class names
+ */
+export function getRTLClasses(
+  baseClasses: string[],
+  rtlClasses: string[] = [],
+  ltrClasses: string[] = [],
+  direction?: Direction
+): string {
+  const dir = direction || getCurrentDirection();
+  const isRTL = dir === 'rtl';
+  
+  const classes = [...baseClasses];
+  
+  if (isRTL && rtlClasses.length > 0) {
+    classes.push(...rtlClasses);
+  } else if (!isRTL && ltrClasses.length > 0) {
+    classes.push(...ltrClasses);
+  }
+  
+  return classes.join(' ');
+}
+
+/**
+ * Persian/Arabic number conversion
+ */
+const PERSIAN_DIGITS = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+const ARABIC_DIGITS = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+const ENGLISH_DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+
+/**
+ * Convert English digits to Persian digits
+ */
+export function toPersianDigits(input: string | number): string {
+  return String(input).replace(/[0-9]/g, (digit) => {
+    const index = ENGLISH_DIGITS.indexOf(digit);
+    return PERSIAN_DIGITS[index] || digit;
+  });
+}
+
+/**
+ * Convert English digits to Arabic digits
+ */
+export function toArabicDigits(input: string | number): string {
+  return String(input).replace(/[0-9]/g, (digit) => {
+    const index = ENGLISH_DIGITS.indexOf(digit);
+    return ARABIC_DIGITS[index] || digit;
+  });
+}
+
+/**
+ * Convert Persian/Arabic digits to English digits
+ */
+export function toEnglishDigits(input: string): string {
+  return input
+    .replace(/[۰-۹]/g, (digit) => {
+      const index = PERSIAN_DIGITS.indexOf(digit);
+      return ENGLISH_DIGITS[index] || digit;
+    })
+    .replace(/[٠-٩]/g, (digit) => {
+      const index = ARABIC_DIGITS.indexOf(digit);
+      return ENGLISH_DIGITS[index] || digit;
+    });
+}
+
+/**
+ * Format number based on locale
+ */
+export function formatNumber(
+  num: number,
+  locale: string = 'fa-IR',
+  options?: Intl.NumberFormatOptions
+): string {
+  try {
+    return new Intl.NumberFormat(locale, options).format(num);
+  } catch {
+    // Fallback for unsupported locales
+    return isRTLLanguage(locale.split('-')[0]) 
+      ? toPersianDigits(num.toLocaleString())
+      : num.toLocaleString();
+  }
+}
+
+/**
+ * Format currency based on locale
+ */
+export function formatCurrency(
+  amount: number,
+  currency: string = 'IRR',
+  locale: string = 'fa-IR'
+): string {
+  const currencySymbols: Record<string, string> = {
+    IRR: 'ریال',
+    USD: '$',
+    EUR: '€',
+    GBP: '£',
+  };
+  
+  try {
+    if (locale.startsWith('fa')) {
+      const formattedAmount = formatNumber(amount, locale);
+      return `${formattedAmount} ${currencySymbols[currency] || currency}`;
+    }
+    
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency,
+    }).format(amount);
+  } catch {
+    return `${formatNumber(amount, locale)} ${currencySymbols[currency] || currency}`;
+  }
+}
+
+/**
+ * Get text alignment based on direction
+ */
+export function getTextAlign(
+  align: 'start' | 'end' | 'center' | 'justify',
+  direction?: Direction
+): string {
+  const dir = direction || getCurrentDirection();
+  
+  switch (align) {
+    case 'start':
+      return dir === 'rtl' ? 'right' : 'left';
+    case 'end':
+      return dir === 'rtl' ? 'left' : 'right';
+    case 'center':
+      return 'center';
+    case 'justify':
+      return 'justify';
+    default:
+      return dir === 'rtl' ? 'right' : 'left';
+  }
+}
+
+/**
+ * Get flex direction based on direction
+ */
+export function getFlexDirection(
+  direction?: Direction,
+  reverse: boolean = false
+): string {
+  const dir = direction || getCurrentDirection();
+  const isRTL = dir === 'rtl';
+  
+  if (reverse) {
+    return isRTL ? 'row' : 'row-reverse';
+  }
+  
+  return isRTL ? 'row-reverse' : 'row';
+}
+
+/**
+ * Get transform for icons in RTL
+ */
+export function getIconTransform(direction?: Direction): string {
+  const dir = direction || getCurrentDirection();
+  return dir === 'rtl' ? 'scaleX(-1)' : 'none';
+}
+
+/**
+ * Check if text contains RTL characters
+ */
+export function containsRTLCharacters(text: string): boolean {
+  const rtlChars = /[\u0590-\u05FF\u0600-\u06FF\u0700-\u074F\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+  return rtlChars.test(text);
+}
+
+/**
+ * Get appropriate font family based on text content
+ */
+export function getAppropriateFontFamily(text: string): string {
+  if (containsRTLCharacters(text)) {
+    return 'var(--font-iranSans)';
+  }
+  return 'var(--font-vazir)';
+}
+
+/**
+ * Mix RTL and LTR text properly
+ */
+export function mixedTextDirection(text: string): 'ltr' | 'rtl' | 'auto' {
+  const rtlCount = (text.match(/[\u0590-\u05FF\u0600-\u06FF\u0700-\u074F\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g) || []).length;
+  const ltrCount = (text.match(/[A-Za-z]/g) || []).length;
+  
+  if (rtlCount > ltrCount * 2) return 'rtl';
+  if (ltrCount > rtlCount * 2) return 'ltr';
+  return 'auto';
+}
+
+/**
+ * Create RTL-aware event handlers
+ */
+export function createRTLAwareHandlers<T extends Event>(
+  handlers: {
+    onLeft?: (event: T) => void;
+    onRight?: (event: T) => void;
+    onStart?: (event: T) => void;
+    onEnd?: (event: T) => void;
+  },
+  direction?: Direction
+) {
+  const dir = direction || getCurrentDirection();
+  const isRTL = dir === 'rtl';
+  
+  return {
+    onLeft: isRTL ? handlers.onEnd || handlers.onRight : handlers.onStart || handlers.onLeft,
+    onRight: isRTL ? handlers.onStart || handlers.onLeft : handlers.onEnd || handlers.onRight,
+  };
+}
+
+/**
+ * Get placeholder text based on direction
+ */
+export function getPlaceholderByDirection(
+  placeholders: { ltr: string; rtl: string },
+  direction?: Direction
+): string {
+  const dir = direction || getCurrentDirection();
+  return dir === 'rtl' ? placeholders.rtl : placeholders.ltr;
+}
+
+/**
+ * Validate and normalize language code
+ */
+export function normalizeLanguageCode(lang: string): Language | null {
+  const normalized = lang.toLowerCase().split('-')[0];
+  
+  if (RTL_LANGUAGES.includes(normalized as RTLLanguage)) {
+    return normalized as RTLLanguage;
+  }
+  
+  if (LTR_LANGUAGES.includes(normalized as LTRLanguage)) {
+    return normalized as LTRLanguage;
+  }
+  
+  return null;
+}
+
+/**
+ * Get browser language preference
+ */
+export function getBrowserLanguage(): Language | null {
+  if (typeof navigator === 'undefined') return null;
+  
+  const browserLang = navigator.language || (navigator as any).userLanguage;
+  return normalizeLanguageCode(browserLang);
+}
+
+/**
+ * Storage utilities for direction preference
+ */
+export const RTL_STORAGE_KEY = 'alpha-store-direction';
+
+export function saveDirectionPreference(direction: Direction): void {
+  if (typeof localStorage === 'undefined') return;
+  localStorage.setItem(RTL_STORAGE_KEY, direction);
+}
+
+export function loadDirectionPreference(): Direction | null {
+  if (typeof localStorage === 'undefined') return null;
+  const stored = localStorage.getItem(RTL_STORAGE_KEY);
+  return stored === 'rtl' || stored === 'ltr' ? stored : null;
+}
+
+export function clearDirectionPreference(): void {
+  if (typeof localStorage === 'undefined') return;
+  localStorage.removeItem(RTL_STORAGE_KEY);
+}

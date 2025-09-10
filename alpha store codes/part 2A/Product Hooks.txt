@@ -1,0 +1,357 @@
+// src/hooks/useProducts.ts
+
+import { useState, useEffect, useCallback } from 'react';
+import { Product, ProductFilters, ProductSortOption, sampleProducts } from '../types/product';
+
+interface UseProductsOptions {
+  filters?: ProductFilters;
+  sortBy?: ProductSortOption['key'];
+  page?: number;
+  limit?: number;
+  categorySlug?: string;
+}
+
+interface UseProductsReturn {
+  products: Product[];
+  loading: boolean;
+  error: string | null;
+  hasMore: boolean;
+  totalCount: number;
+  loadMore: () => void;
+  refetch: () => void;
+  setFilters: (filters: ProductFilters) => void;
+  setSortBy: (sortBy: ProductSortOption['key']) => void;
+}
+
+// Simulate API delay
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * Hook for fetching and managing products with filtering, sorting, and pagination
+ */
+export function useProducts(options: UseProductsOptions = {}): UseProductsReturn {
+  const {
+    filters: initialFilters = {},
+    sortBy: initialSortBy = 'newest',
+    page: initialPage = 1,
+    limit = 12,
+    categorySlug
+  } = options;
+
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [filters, setFilters] = useState<ProductFilters>(initialFilters);
+  const [sortBy, setSortBy] = useState<ProductSortOption['key']>(initialSortBy);
+  const [page, setPage] = useState(initialPage);
+  const [hasMore, setHasMore] = useState(true);
+  const [totalCount, setTotalCount] = useState(0);
+
+  // Apply filters to products
+  const applyFilters = useCallback((products: Product[], filters: ProductFilters): Product[] => {
+    let filtered = [...products];
+
+    // Category filter
+    if (filters.category) {
+      filtered = filtered.filter(product => 
+        product.category.slug === filters.category
+      );
+    }
+
+    // Price range filter
+    if (filters.minPrice !== undefined) {
+      filtered = filtered.filter(product => 
+        product.price.amount >= filters.minPrice!
+      );
+    }
+    if (filters.maxPrice !== undefined) {
+      filtered = filtered.filter(product => 
+        product.price.amount <= filters.maxPrice!
+      );
+    }
+
+    // Brand filter
+    if (filters.brand && filters.brand.length > 0) {
+      filtered = filtered.filter(product => 
+        product.brand && filters.brand!.includes(product.brand.id)
+      );
+    }
+
+    // Rating filter
+    if (filters.rating !== undefined) {
+      filtered = filtered.filter(product => 
+        product.rating.average >= filters.rating!
+      );
+    }
+
+    // Stock filter
+    if (filters.inStock !== undefined) {
+      filtered = filtered.filter(product => 
+        product.isInStock === filters.inStock
+      );
+    }
+
+    // Tags filter
+    if (filters.tags && filters.tags.length > 0) {
+      filtered = filtered.filter(product => 
+        filters.tags!.some(tag => product.tags.includes(tag))
+      );
+    }
+
+    return filtered;
+  }, []);
+
+  // Apply sorting to products
+  const applySorting = useCallback((products: Product[], sortBy: ProductSortOption['key']): Product[] => {
+    const sorted = [...products];
+
+    switch (sortBy) {
+      case 'newest':
+        return sorted.sort((a, b) => 
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+      
+      case 'price-low':
+        return sorted.sort((a, b) => a.price.amount - b.price.amount);
+      
+      case 'price-high':
+        return sorted.sort((a, b) => b.price.amount - a.price.amount);
+      
+      case 'rating':
+        return sorted.sort((a, b) => b.rating.average - a.rating.average);
+      
+      case 'popular':
+        return sorted.sort((a, b) => b.rating.count - a.rating.count);
+      
+      default:
+        return sorted;
+    }
+  }, []);
+
+  // Fetch products from API (simulated)
+  const fetchProducts = useCallback(async (
+    page: number,
+    filters: ProductFilters,
+    sortBy: ProductSortOption['key'],
+    append: boolean = false
+  ) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Simulate API call
+      await delay(800);
+
+      let allProducts = [...sampleProducts];
+
+      // Add category filter from route if provided
+      const effectiveFilters = categorySlug 
+        ? { ...filters, category: categorySlug }
+        : filters;
+
+      // Apply filters and sorting
+      const filtered = applyFilters(allProducts, effectiveFilters);
+      const sorted = applySorting(filtered, sortBy);
+
+      // Pagination
+      const start = (page - 1) * limit;
+      const end = start + limit;
+      const pageProducts = sorted.slice(start, end);
+
+      setTotalCount(sorted.length);
+      setHasMore(end < sorted.length);
+
+      if (append) {
+        setProducts(prev => [...prev, ...pageProducts]);
+      } else {
+        setProducts(pageProducts);
+      }
+
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch products');
+    } finally {
+      setLoading(false);
+    }
+  }, [applyFilters, applySorting, limit, categorySlug]);
+
+  // Load more products (pagination)
+  const loadMore = useCallback(() => {
+    if (!loading && hasMore) {
+      const nextPage = page + 1;
+      setPage(nextPage);
+      fetchProducts(nextPage, filters, sortBy, true);
+    }
+  }, [loading, hasMore, page, filters, sortBy, fetchProducts]);
+
+  // Refetch products (refresh)
+  const refetch = useCallback(() => {
+    setPage(1);
+    fetchProducts(1, filters, sortBy, false);
+  }, [filters, sortBy, fetchProducts]);
+
+  // Handle filter changes
+  const handleSetFilters = useCallback((newFilters: ProductFilters) => {
+    setFilters(newFilters);
+    setPage(1);
+  }, []);
+
+  // Handle sort changes
+  const handleSetSortBy = useCallback((newSortBy: ProductSortOption['key']) => {
+    setSortBy(newSortBy);
+    setPage(1);
+  }, []);
+
+  // Initial fetch and refetch on dependencies change
+  useEffect(() => {
+    fetchProducts(1, filters, sortBy, false);
+  }, [fetchProducts, filters, sortBy]);
+
+  return {
+    products,
+    loading,
+    error,
+    hasMore,
+    totalCount,
+    loadMore,
+    refetch,
+    setFilters: handleSetFilters,
+    setSortBy: handleSetSortBy
+  };
+}
+
+// src/hooks/useWishlist.ts
+
+import { useState, useEffect, useCallback } from 'react';
+import { WishlistItem } from '../types/product';
+
+interface UseWishlistReturn {
+  wishlistItems: WishlistItem[];
+  isInWishlist: (productId: string) => boolean;
+  addToWishlist: (productId: string) => Promise<void>;
+  removeFromWishlist: (productId: string) => Promise<void>;
+  toggleWishlist: (productId: string) => Promise<void>;
+  clearWishlist: () => Promise<void>;
+  loading: boolean;
+  error: string | null;
+}
+
+const WISHLIST_STORAGE_KEY = 'alpha-store-wishlist';
+
+/**
+ * Hook for managing wishlist functionality with local storage persistence
+ */
+export function useWishlist(): UseWishlistReturn {
+  const [wishlistItems, setWishlistItems] = useState<WishlistItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Load wishlist from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(WISHLIST_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored) as WishlistItem[];
+        setWishlistItems(parsed);
+      }
+    } catch (err) {
+      console.error('Failed to load wishlist from storage:', err);
+    }
+  }, []);
+
+  // Save wishlist to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(WISHLIST_STORAGE_KEY, JSON.stringify(wishlistItems));
+    } catch (err) {
+      console.error('Failed to save wishlist to storage:', err);
+    }
+  }, [wishlistItems]);
+
+  // Check if product is in wishlist
+  const isInWishlist = useCallback((productId: string): boolean => {
+    return wishlistItems.some(item => item.productId === productId);
+  }, [wishlistItems]);
+
+  // Add product to wishlist
+  const addToWishlist = useCallback(async (productId: string): Promise<void> => {
+    if (isInWishlist(productId)) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Simulate API call
+      await delay(300);
+
+      const newItem: WishlistItem = {
+        productId,
+        addedAt: new Date().toISOString()
+      };
+
+      setWishlistItems(prev => [...prev, newItem]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add to wishlist');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, [isInWishlist]);
+
+  // Remove product from wishlist
+  const removeFromWishlist = useCallback(async (productId: string): Promise<void> => {
+    if (!isInWishlist(productId)) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Simulate API call
+      await delay(300);
+
+      setWishlistItems(prev => prev.filter(item => item.productId !== productId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove from wishlist');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, [isInWishlist]);
+
+  // Toggle wishlist status
+  const toggleWishlist = useCallback(async (productId: string): Promise<void> => {
+    if (isInWishlist(productId)) {
+      await removeFromWishlist(productId);
+    } else {
+      await addToWishlist(productId);
+    }
+  }, [isInWishlist, addToWishlist, removeFromWishlist]);
+
+  // Clear entire wishlist
+  const clearWishlist = useCallback(async (): Promise<void> => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Simulate API call
+      await delay(300);
+
+      setWishlistItems([]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to clear wishlist');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  return {
+    wishlistItems,
+    isInWishlist,
+    addToWishlist,
+    removeFromWishlist,
+    toggleWishlist,
+    clearWishlist,
+    loading,
+    error
+  };
+}

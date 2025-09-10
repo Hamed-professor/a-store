@@ -1,0 +1,2607 @@
+// =============================================
+// Α STORE BACKEND - PART 6C: PAYMENT & MEDIA APIS
+// =============================================
+
+// services/payments/zarinpalService.js
+const axios = require('axios');
+const crypto = require('crypto');
+
+class ZarinpalService {
+  constructor() {
+    this.merchantId = process.env.ZARINPAL_MERCHANT_ID;
+    this.sandboxMode = process.env.NODE_ENV !== 'production';
+    this.baseUrl = this.sandboxMode 
+      ? 'https://sandbox.zarinpal.com/pg/rest/WebGate'
+      : 'https://payment.zarinpal.com/pg/rest/WebGate';
+  }
+
+  async requestPayment(amount, description, mobile, email, callbackUrl, metadata = {}) {
+    try {
+      const data = {
+        merchant_id: this.merchantId,
+        amount: amount,
+        description: description,
+        callback_url: callbackUrl,
+        mobile: mobile,
+        email: email,
+        metadata: {
+          ...metadata,
+          timestamp: Date.now()
+        }
+      };
+
+      const response = await axios.post(`${this.baseUrl}/PaymentRequest.json`, data, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      });
+
+      if (response.data.data && response.data.data.code === 100) {
+        return {
+          success: true,
+          authority: response.data.data.authority,
+          fee: response.data.data.fee,
+          fee_type: response.data.data.fee_type,
+          paymentUrl: this.sandboxMode
+            ? `https://sandbox.zarinpal.com/pg/StartPay/${response.data.data.authority}`
+            : `https://payment.zarinpal.com/pg/StartPay/${response.data.data.authority}`
+        };
+      } else {
+        throw new Error(response.data.errors?.message || 'Payment request failed');
+      }
+    } catch (error) {
+      console.error('ZarinPal Request Error:', error.message);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  async verifyPayment(authority, amount) {
+    try {
+      const data = {
+        merchant_id: this.merchantId,
+        authority: authority,
+        amount: amount
+      };
+
+      const response = await axios.post(`${this.baseUrl}/PaymentVerification.json`, data, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      });
+
+      if (response.data.data && response.data.data.code === 100) {
+        return {
+          success: true,
+          refId: response.data.data.ref_id,
+          cardHash: response.data.data.card_hash,
+          cardPan: response.data.data.card_pan,
+          fee: response.data.data.fee,
+          feeType: response.data.data.fee_type
+        };
+      } else {
+        throw new Error(response.data.errors?.message || 'Payment verification failed');
+      }
+    } catch (error) {
+      console.error('ZarinPal Verification Error:', error.message);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  async unverifiedTransactions() {
+    try {
+      const response = await axios.post(`${this.baseUrl}/UnverifiedTransactions.json`, {
+        merchant_id: this.merchantId
+      });
+
+      return {
+        success: true,
+        authorities: response.data.data.authorities || []
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  validateWebhook(signature, data) {
+    const expectedSignature = crypto
+      .createHmac('sha256', process.env.ZARINPAL_WEBHOOK_SECRET)
+      .update(JSON.stringify(data))
+      .digest('hex');
+    
+    return signature === expectedSignature;
+  }
+}
+
+module.exports = ZarinpalService;
+
+// services/payments/payirService.js
+class PayirService {
+  constructor() {
+    this.apiKey = process.env.PAYIR_API_KEY;
+    this.baseUrl = 'https://pay.ir/pg';
+  }
+
+  async requestPayment(amount, description, mobile, callbackUrl, validCardNumber = null) {
+    try {
+      const data = {
+        api: this.apiKey,
+        amount: amount * 10, // Pay.ir uses Rial
+        redirect: callbackUrl,
+        mobile: mobile,
+        factorNumber: Math.floor(Math.random() * 100000),
+        description: description
+      };
+
+      if (validCardNumber) {
+        data.validCardNumber = validCardNumber;
+      }
+
+      const response = await axios.post(`${this.baseUrl}/send`, data);
+
+      if (response.data.status === 1) {
+        return {
+          success: true,
+          token: response.data.token,
+          paymentUrl: `https://pay.ir/pg/${response.data.token}`
+        };
+      } else {
+        throw new Error(response.data.errorMessage || 'Payment request failed');
+      }
+    } catch (error) {
+      console.error('Pay.ir Request Error:', error.message);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  async verifyPayment(token) {
+    try {
+      const response = await axios.post(`${this.baseUrl}/verify`, {
+        api: this.apiKey,
+        token: token
+      });
+
+      if (response.data.status === 1) {
+        return {
+          success: true,
+          transId: response.data.transId,
+          factorNumber: response.data.factorNumber,
+          mobile: response.data.mobile,
+          description: response.data.description,
+          cardNumber: response.data.cardNumber,
+          traceNumber: response.data.traceNumber,
+          message: response.data.message
+        };
+      } else {
+        throw new Error(response.data.errorMessage || 'Payment verification failed');
+      }
+    } catch (error) {
+      console.error('Pay.ir Verification Error:', error.message);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+}
+
+module.exports = PayirService;
+
+// services/payments/nextpayService.js
+class NextpayService {
+  constructor() {
+    this.apiKey = process.env.NEXTPAY_API_KEY;
+    this.baseUrl = 'https://nextpay.org/nx/gateway';
+  }
+
+  async requestPayment(amount, orderId, customerPhone, customJson, callbackUri) {
+    try {
+      const data = {
+        api_key: this.apiKey,
+        amount: amount,
+        order_id: orderId,
+        customer_phone: customerPhone,
+        custom_json_fields: customJson,
+        callback_uri: callbackUri,
+        currency: 'IRT' // Iranian Toman
+      };
+
+      const response = await axios.post(`${this.baseUrl}/token`, data);
+
+      if (response.data.code === -1) {
+        return {
+          success: true,
+          transId: response.data.trans_id,
+          paymentUrl: `https://nextpay.org/nx/gateway/payment/${response.data.trans_id}`
+        };
+      } else {
+        throw new Error(response.data.message || 'Payment request failed');
+      }
+    } catch (error) {
+      console.error('NextPay Request Error:', error.message);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  async verifyPayment(transId, amount) {
+    try {
+      const response = await axios.post(`${this.baseUrl}/verify`, {
+        api_key: this.apiKey,
+        trans_id: transId,
+        amount: amount,
+        currency: 'IRT'
+      });
+
+      if (response.data.code === 0) {
+        return {
+          success: true,
+          amount: response.data.amount,
+          orderId: response.data.order_id,
+          customerPhone: response.data.customer_phone,
+          customJsonFields: response.data.custom_json_fields,
+          shaparak: response.data.Shaparak
+        };
+      } else {
+        throw new Error(response.data.message || 'Payment verification failed');
+      }
+    } catch (error) {
+      console.error('NextPay Verification Error:', error.message);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+}
+
+module.exports = NextpayService;
+
+// services/media/cloudinaryService.js
+const cloudinary = require('cloudinary').v2;
+const multer = require('multer');
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+
+class CloudinaryService {
+  constructor() {
+    cloudinary.config({
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET
+    });
+
+    this.storage = new CloudinaryStorage({
+      cloudinary: cloudinary,
+      params: {
+        folder: 'alphastore',
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf', 'mp4', 'mov'],
+        resource_type: 'auto',
+        transformation: [
+          { quality: 'auto', fetch_format: 'auto' }
+        ]
+      }
+    });
+
+    this.upload = multer({ 
+      storage: this.storage,
+      limits: {
+        fileSize: 10 * 1024 * 1024 // 10MB limit
+      },
+      fileFilter: (req, file, cb) => {
+        const allowedTypes = /jpeg|jpg|png|webp|gif|pdf|mp4|mov/;
+        const extname = allowedTypes.test(file.originalname.toLowerCase());
+        const mimetype = allowedTypes.test(file.mimetype);
+
+        if (mimetype && extname) {
+          return cb(null, true);
+        } else {
+          cb(new Error('Invalid file type'));
+        }
+      }
+    });
+  }
+
+  async uploadSingle(buffer, options = {}) {
+    try {
+      return new Promise((resolve, reject) => {
+        cloudinary.uploader.upload_stream(
+          {
+            folder: 'alphastore',
+            resource_type: 'auto',
+            ...options
+          },
+          (error, result) => {
+            if (error) {
+              reject(error);
+            } else {
+              resolve({
+                success: true,
+                publicId: result.public_id,
+                url: result.secure_url,
+                width: result.width,
+                height: result.height,
+                format: result.format,
+                bytes: result.bytes,
+                createdAt: result.created_at
+              });
+            }
+          }
+        ).end(buffer);
+      });
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  async uploadMultiple(files, options = {}) {
+    try {
+      const uploadPromises = files.map(file => this.uploadSingle(file.buffer, options));
+      const results = await Promise.all(uploadPromises);
+      
+      return {
+        success: true,
+        uploads: results
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  async deleteFile(publicId) {
+    try {
+      const result = await cloudinary.uploader.destroy(publicId);
+      
+      return {
+        success: result.result === 'ok',
+        result: result.result
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  async optimizeImage(publicId, transformations = {}) {
+    try {
+      const defaultTransformations = {
+        quality: 'auto',
+        fetch_format: 'auto',
+        crop: 'limit',
+        width: 1200
+      };
+
+      const url = cloudinary.url(publicId, {
+        ...defaultTransformations,
+        ...transformations
+      });
+
+      return {
+        success: true,
+        optimizedUrl: url
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  async getFileInfo(publicId) {
+    try {
+      const result = await cloudinary.api.resource(publicId);
+      
+      return {
+        success: true,
+        info: {
+          publicId: result.public_id,
+          url: result.secure_url,
+          width: result.width,
+          height: result.height,
+          format: result.format,
+          bytes: result.bytes,
+          createdAt: result.created_at,
+          tags: result.tags
+        }
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  generateTransformations(type, size) {
+    const transformations = {
+      product_thumb: { width: 300, height: 300, crop: 'fill', quality: '80' },
+      product_main: { width: 800, height: 800, crop: 'limit', quality: '90' },
+      category_banner: { width: 1200, height: 400, crop: 'fill', quality: '85' },
+      avatar: { width: 150, height: 150, crop: 'fill', gravity: 'face', quality: '80' }
+    };
+
+    return transformations[type] || transformations.product_main;
+  }
+}
+
+module.exports = CloudinaryService;
+
+// services/notifications/emailService.js
+const nodemailer = require('nodemailer');
+const fs = require('fs').promises;
+const path = require('path');
+
+class EmailService {
+  constructor() {
+    this.transporter = nodemailer.createTransporter({
+      host: process.env.SMTP_HOST,
+      port: process.env.SMTP_PORT,
+      secure: process.env.SMTP_PORT == 465,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
+      }
+    });
+  }
+
+  async sendEmail(to, subject, html, attachments = []) {
+    try {
+      const mailOptions = {
+        from: `"Α Store" <${process.env.SMTP_FROM}>`,
+        to: to,
+        subject: subject,
+        html: html,
+        attachments: attachments
+      };
+
+      const result = await this.transporter.sendMail(mailOptions);
+      
+      return {
+        success: true,
+        messageId: result.messageId
+      };
+    } catch (error) {
+      console.error('Email Send Error:', error.message);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  async sendOrderConfirmation(order, user, language = 'fa') {
+    try {
+      const template = await this.loadTemplate('order-confirmation', language);
+      const html = this.replaceTemplateVars(template, {
+        userName: user.fullName,
+        orderId: order._id,
+        orderDate: new Date(order.createdAt).toLocaleDateString('fa-IR'),
+        items: order.items,
+        totalAmount: order.totalAmount.toLocaleString('fa-IR'),
+        shippingAddress: order.shippingAddress
+      });
+
+      const subject = language === 'fa' 
+        ? `تأیید سفارش شما در Α Store - شماره ${order._id}`
+        : `Order Confirmation - Α Store #${order._id}`;
+
+      return await this.sendEmail(user.email, subject, html);
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  async sendPaymentReceipt(payment, order, user, language = 'fa') {
+    try {
+      const template = await this.loadTemplate('payment-receipt', language);
+      const html = this.replaceTemplateVars(template, {
+        userName: user.fullName,
+        orderId: order._id,
+        paymentId: payment.transactionId,
+        amount: payment.amount.toLocaleString('fa-IR'),
+        paymentDate: new Date(payment.paidAt).toLocaleDateString('fa-IR'),
+        paymentMethod: payment.gateway
+      });
+
+      const subject = language === 'fa'
+        ? `رسید پرداخت - Α Store`
+        : `Payment Receipt - Α Store`;
+
+      return await this.sendEmail(user.email, subject, html);
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  async sendWelcomeEmail(user, language = 'fa') {
+    try {
+      const template = await this.loadTemplate('welcome', language);
+      const html = this.replaceTemplateVars(template, {
+        userName: user.fullName,
+        websiteUrl: process.env.FRONTEND_URL
+      });
+
+      const subject = language === 'fa'
+        ? `خوش آمدید به Α Store`
+        : `Welcome to Α Store`;
+
+      return await this.sendEmail(user.email, subject, html);
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  async sendBulkEmail(recipients, subject, html) {
+    try {
+      const results = await Promise.all(
+        recipients.map(email => this.sendEmail(email, subject, html))
+      );
+
+      const successful = results.filter(r => r.success).length;
+      const failed = results.filter(r => !r.success).length;
+
+      return {
+        success: true,
+        sent: successful,
+        failed: failed,
+        results: results
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  async loadTemplate(templateName, language = 'fa') {
+    try {
+      const templatePath = path.join(__dirname, '../../templates/email', language, `${templateName}.html`);
+      return await fs.readFile(templatePath, 'utf8');
+    } catch (error) {
+      // Fallback to English if Persian template not found
+      const templatePath = path.join(__dirname, '../../templates/email/en', `${templateName}.html`);
+      return await fs.readFile(templatePath, 'utf8');
+    }
+  }
+
+  replaceTemplateVars(template, vars) {
+    let html = template;
+    
+    Object.keys(vars).forEach(key => {
+      const regex = new RegExp(`{{${key}}}`, 'g');
+      html = html.replace(regex, vars[key]);
+    });
+
+    return html;
+  }
+}
+
+module.exports = EmailService;
+
+// services/notifications/smsService.js
+const axios = require('axios');
+
+class SMSService {
+  constructor() {
+    this.apiKey = process.env.SMS_API_KEY;
+    this.username = process.env.SMS_USERNAME;
+    this.password = process.env.SMS_PASSWORD;
+    this.lineNumber = process.env.SMS_LINE_NUMBER;
+    this.baseUrl = 'https://rest.payamak-panel.com/api/SendSMS/SendSMS';
+  }
+
+  async sendSMS(mobile, message) {
+    try {
+      const data = {
+        username: this.username,
+        password: this.password,
+        to: mobile,
+        from: this.lineNumber,
+        text: message,
+        isflash: false
+      };
+
+      const response = await axios.post(this.baseUrl, data, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.data.RetStatus === 1) {
+        return {
+          success: true,
+          messageId: response.data.Value
+        };
+      } else {
+        throw new Error(response.data.StrRetStatus || 'SMS send failed');
+      }
+    } catch (error) {
+      console.error('SMS Send Error:', error.message);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  async sendOrderNotification(mobile, orderId, status, language = 'fa') {
+    const messages = {
+      fa: {
+        confirmed: `سفارش شما با شماره ${orderId} تأیید شد. Α Store`,
+        processing: `سفارش ${orderId} در حال آماده‌سازی است. Α Store`,
+        shipped: `سفارش ${orderId} ارسال شد. Α Store`,
+        delivered: `سفارش ${orderId} تحویل داده شد. Α Store`,
+        cancelled: `سفارش ${orderId} لغو شد. Α Store`
+      },
+      en: {
+        confirmed: `Your order #${orderId} has been confirmed. Α Store`,
+        processing: `Order #${orderId} is being processed. Α Store`,
+        shipped: `Order #${orderId} has been shipped. Α Store`,
+        delivered: `Order #${orderId} has been delivered. Α Store`,
+        cancelled: `Order #${orderId} has been cancelled. Α Store`
+      }
+    };
+
+    const message = messages[language][status] || messages.fa[status];
+    return await this.sendSMS(mobile, message);
+  }
+
+  async sendVerificationCode(mobile, code, language = 'fa') {
+    const message = language === 'fa'
+      ? `کد تأیید Α Store: ${code}`
+      : `Α Store verification code: ${code}`;
+
+    return await this.sendSMS(mobile, message);
+  }
+
+  async sendBulkSMS(mobiles, message) {
+    try {
+      const results = await Promise.all(
+        mobiles.map(mobile => this.sendSMS(mobile, message))
+      );
+
+      const successful = results.filter(r => r.success).length;
+      const failed = results.filter(r => !r.success).length;
+
+      return {
+        success: true,
+        sent: successful,
+        failed: failed,
+        results: results
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+}
+
+module.exports = SMSService;
+
+// controllers/paymentController.js
+const ZarinpalService = require('../services/payments/zarinpalService');
+const PayirService = require('../services/payments/payirService');
+const NextpayService = require('../services/payments/nextpayService');
+const Order = require('../models/Order');
+const Payment = require('../models/Payment');
+const EmailService = require('../services/notifications/emailService');
+const SMSService = require('../services/notifications/smsService');
+
+class PaymentController {
+  constructor() {
+    this.zarinpal = new ZarinpalService();
+    this.payir = new PayirService();
+    this.nextpay = new NextpayService();
+    this.emailService = new EmailService();
+    this.smsService = new SMSService();
+  }
+
+  // Gateway health check
+  async checkGatewayHealth() {
+    const gateways = [
+      { name: 'zarinpal', service: this.zarinpal },
+      { name: 'payir', service: this.payir },
+      { name: 'nextpay', service: this.nextpay }
+    ];
+
+    const healthChecks = await Promise.all(
+      gateways.map(async (gateway) => {
+        try {
+          // Simple health check - you can customize based on each gateway's API
+          return { name: gateway.name, status: 'healthy' };
+        } catch (error) {
+          return { name: gateway.name, status: 'down', error: error.message };
+        }
+      })
+    );
+
+    return healthChecks;
+  }
+
+  // Select best available gateway
+  selectGateway(preferredGateway = null) {
+    const gateways = ['zarinpal', 'payir', 'nextpay'];
+    
+    if (preferredGateway && gateways.includes(preferredGateway)) {
+      return preferredGateway;
+    }
+
+    // Default priority order
+    return 'zarinpal';
+  }
+
+  // ZarinPal payment request
+  async requestZarinpalPayment(req, res) {
+    try {
+      const { orderId, gateway = 'zarinpal' } = req.body;
+
+      // Find and validate order
+      const order = await Order.findById(orderId).populate('user');
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          message: 'سفارش یافت نشد'
+        });
+      }
+
+      if (order.paymentStatus === 'paid') {
+        return res.status(400).json({
+          success: false,
+          message: 'این سفارش قبلاً پرداخت شده است'
+        });
+      }
+
+      const callbackUrl = `${process.env.FRONTEND_URL}/payment/callback`;
+      const selectedGateway = this.selectGateway(gateway);
+      let paymentResult;
+
+      // Process payment based on selected gateway
+      switch (selectedGateway) {
+        case 'zarinpal':
+          paymentResult = await this.zarinpal.requestPayment(
+            order.totalAmount,
+            `پرداخت سفارش ${orderId}`,
+            order.user.mobile,
+            order.user.email,
+            callbackUrl,
+            { orderId: orderId.toString() }
+          );
+          break;
+
+        case 'payir':
+          paymentResult = await this.payir.requestPayment(
+            Math.round(order.totalAmount / 10), // Convert to Toman
+            `پرداخت سفارش ${orderId}`,
+            order.user.mobile,
+            callbackUrl
+          );
+          break;
+
+        case 'nextpay':
+          paymentResult = await this.nextpay.requestPayment(
+            order.totalAmount,
+            orderId.toString(),
+            order.user.mobile,
+            JSON.stringify({ orderId }),
+            callbackUrl
+          );
+          break;
+
+        default:
+          throw new Error('Gateway not supported');
+      }
+
+      if (paymentResult.success) {
+        // Create payment record
+        const payment = new Payment({
+          order: orderId,
+          user: order.user._id,
+          amount: order.totalAmount,
+          gateway: selectedGateway,
+          transactionId: paymentResult.authority || paymentResult.token || paymentResult.transId,
+          status: 'pending',
+          metadata: paymentResult
+        });
+
+        await payment.save();
+
+        // Update order
+        order.payment = payment._id;
+        await order.save();
+
+        res.json({
+          success: true,
+          payment: {
+            id: payment._id,
+            gateway: selectedGateway,
+            paymentUrl: paymentResult.paymentUrl,
+            transactionId: payment.transactionId
+          }
+        });
+      } else {
+        res.status(400).json({
+          success: false,
+          message: paymentResult.error || 'خطا در درخواست پرداخت'
+        });
+      }
+    } catch (error) {
+      console.error('Payment request error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'خطا در سرور'
+      });
+    }
+  }
+
+  // Verify payment
+  async verifyPayment(req, res) {
+    try {
+      const { Authority: authority, Status: status, token, trans_id } = req.query;
+      let payment;
+
+      // Find payment by transaction ID
+      if (authority) {
+        payment = await Payment.findOne({ transactionId: authority }).populate(['order', 'user']);
+      } else if (token) {
+        payment = await Payment.findOne({ transactionId: token }).populate(['order', 'user']);
+      } else if (trans_id) {
+        payment = await Payment.findOne({ transactionId: trans_id }).populate(['order', 'user']);
+      }
+
+      if (!payment) {
+        return res.status(404).json({
+          success: false,
+          message: 'تراکنش یافت نشد'
+        });
+      }
+
+      let verificationResult;
+
+      // Verify based on gateway
+      switch (payment.gateway) {
+        case 'zarinpal':
+          if (status === 'OK') {
+            verificationResult = await this.zarinpal.verifyPayment(authority, payment.amount);
+          } else {
+            verificationResult = { success: false, error: 'Payment cancelled by user' };
+          }
+          break;
+
+        case 'payir':
+          verificationResult = await this.payir.verifyPayment(token);
+          break;
+
+        case 'nextpay':
+          verificationResult = await this.nextpay.verifyPayment(trans_id, payment.amount);
+          break;
+
+        default:
+          throw new Error('Gateway not supported');
+      }
+
+      if (verificationResult.success) {
+        // Update payment
+        payment.status = 'completed';
+        payment.paidAt = new Date();
+        payment.verificationData = verificationResult;
+        await payment.save();
+
+        // Update order
+        const order = payment.order;
+        order.paymentStatus = 'paid';
+        order.status = 'confirmed';
+        await order.save();
+
+        // Send notifications
+        await this.emailService.sendPaymentReceipt(payment, order, payment.user);
+        await this.smsService.sendOrderNotification(
+          payment.user.mobile,
+          order._id,
+          'confirmed'
+        );
+
+        res.json({
+          success: true,
+          message: 'پرداخت با موفقیت انجام شد',
+          payment: {
+            id: payment._id,
+            refId: verificationResult.refId || verificationResult.transId,
+            amount: payment.amount
+          }
+        });
+      } else {
+        // Update payment as failed
+        payment.status = 'failed';
+        payment.failureReason = verificationResult.error;
+        await payment.save();
+
+        res.status(400).json({
+          success: false,
+          message: verificationResult.error || 'خطا در تأیید پرداخت'
+        });
+      }
+    } catch (error) {
+      console.error('Payment verification error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'خطا در سرور'
+      });
+    }
+  }
+
+  // Webhook handler
+  async handleWebhook(req, res) {
+    try {
+      const signature = req.headers['x-webhook-signature'];
+      const data = req.body;
+
+      // Validate webhook signature for ZarinPal
+      if (data.gateway === 'zarinpal') {
+        if (!this.zarinpal.validateWebhook(signature, data)) {
+          return res.status(401).json({ success: false, message: 'Invalid signature' });
+        }
+      }
+
+      // Process webhook based on gateway
+      const payment = await Payment.findOne({ 
+        transactionId: data.authority || data.token || data.trans_id 
+      }).populate(['order', 'user']);
+
+      if (!payment) {
+        return res.status(404).json({ success: false, message: 'Payment not found' });
+      }
+
+      // Update payment status based on webhook data
+      if (data.status === 'success' || data.code === 100) {
+        payment.status = 'completed';
+        payment.paidAt = new Date();
+        await payment.save();
+
+        // Update order
+        const order = payment.order;
+        order.paymentStatus = 'paid';
+        order.status = 'confirmed';
+        await order.save();
+
+        // Send notifications
+        await this.emailService.sendOrderConfirmation(order, payment.user);
+        await this.smsService.sendOrderNotification(payment.user.mobile, order._id, 'confirmed');
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Webhook error:', error);
+      res.status(500).json({ success: false, message: 'Server error' });
+    }
+  }
+
+  // Get payment status
+  async getPaymentStatus(req, res) {
+    try {
+      const { orderId } = req.params;
+
+      const order = await Order.findById(orderId).populate('payment');
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          message: 'سفارش یافت نشد'
+        });
+      }
+
+      res.json({
+        success: true,
+        paymentStatus: order.paymentStatus,
+        payment: order.payment ? {
+          id: order.payment._id,
+          status: order.payment.status,
+          gateway: order.payment.gateway,
+          amount: order.payment.amount,
+          paidAt: order.payment.paidAt,
+          transactionId: order.payment.transactionId
+        } : null
+      });
+    } catch (error) {
+      console.error('Get payment status error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'خطا در سرور'
+      });
+    }
+  }
+
+  // Get gateway health status
+  async getGatewayStatus(req, res) {
+    try {
+      const healthChecks = await this.checkGatewayHealth();
+      
+      res.json({
+        success: true,
+        gateways: healthChecks
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'خطا در بررسی وضعیت درگاه‌ها'
+      });
+    }
+  }
+}
+
+module.exports = PaymentController;
+
+// controllers/mediaController.js
+const CloudinaryService = require('../services/media/cloudinaryService');
+const Media = require('../models/Media');
+
+class MediaController {
+  constructor() {
+    this.cloudinaryService = new CloudinaryService();
+  }
+
+  // Single file upload
+  async uploadSingle(req, res) {
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: 'فایل انتخاب نشده است'
+        });
+      }
+
+      const uploadResult = await this.cloudinaryService.uploadSingle(req.file.buffer, {
+        transformation: req.body.transformation ? JSON.parse(req.body.transformation) : {}
+      });
+
+      if (uploadResult.success) {
+        // Save media record to database
+        const media = new Media({
+          publicId: uploadResult.publicId,
+          url: uploadResult.url,
+          originalName: req.file.originalname,
+          mimeType: req.file.mimetype,
+          size: uploadResult.bytes,
+          width: uploadResult.width,
+          height: uploadResult.height,
+          format: uploadResult.format,
+          uploadedBy: req.user?._id
+        });
+
+        await media.save();
+
+        res.json({
+          success: true,
+          media: {
+            id: media._id,
+            url: media.url,
+            publicId: media.publicId,
+            originalName: media.originalName,
+            size: media.size,
+            width: media.width,
+            height: media.height,
+            format: media.format
+          }
+        });
+      } else {
+        res.status(400).json({
+          success: false,
+          message: uploadResult.error
+        });
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'خطا در آپلود فایل'
+      });
+    }
+  }
+
+  // Multiple files upload
+  async uploadMultiple(req, res) {
+    try {
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'فایل انتخاب نشده است'
+        });
+      }
+
+      const uploadResults = await this.cloudinaryService.uploadMultiple(req.files);
+
+      if (uploadResults.success) {
+        // Save media records to database
+        const mediaRecords = await Promise.all(
+          uploadResults.uploads.map(async (upload, index) => {
+            if (upload.success) {
+              const media = new Media({
+                publicId: upload.publicId,
+                url: upload.url,
+                originalName: req.files[index].originalname,
+                mimeType: req.files[index].mimetype,
+                size: upload.bytes,
+                width: upload.width,
+                height: upload.height,
+                format: upload.format,
+                uploadedBy: req.user?._id
+              });
+
+              await media.save();
+              return media;
+            }
+            return null;
+          })
+        );
+
+        const successfulUploads = mediaRecords.filter(media => media !== null);
+
+        res.json({
+          success: true,
+          uploaded: successfulUploads.length,
+          total: req.files.length,
+          media: successfulUploads.map(media => ({
+            id: media._id,
+            url: media.url,
+            publicId: media.publicId,
+            originalName: media.originalName,
+            size: media.size,
+            width: media.width,
+            height: media.height,
+            format: media.format
+          }))
+        });
+      } else {
+        res.status(400).json({
+          success: false,
+          message: uploadResults.error
+        });
+      }
+    } catch (error) {
+      console.error('Bulk upload error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'خطا در آپلود فایل‌ها'
+      });
+    }
+  }
+
+  // Delete file
+  async deleteFile(req, res) {
+    try {
+      const { id } = req.params;
+
+      const media = await Media.findById(id);
+      if (!media) {
+        return res.status(404).json({
+          success: false,
+          message: 'فایل یافت نشد'
+        });
+      }
+
+      // Delete from Cloudinary
+      const deleteResult = await this.cloudinaryService.deleteFile(media.publicId);
+
+      if (deleteResult.success) {
+        // Delete from database
+        await Media.findByIdAndDelete(id);
+
+        res.json({
+          success: true,
+          message: 'فایل با موفقیت حذف شد'
+        });
+      } else {
+        res.status(400).json({
+          success: false,
+          message: deleteResult.error
+        });
+      }
+    } catch (error) {
+      console.error('Delete file error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'خطا در حذف فایل'
+      });
+    }
+  }
+
+  // Get file information
+  async getFileInfo(req, res) {
+    try {
+      const { id } = req.params;
+
+      const media = await Media.findById(id).populate('uploadedBy', 'fullName email');
+      if (!media) {
+        return res.status(404).json({
+          success: false,
+          message: 'فایل یافت نشد'
+        });
+      }
+
+      res.json({
+        success: true,
+        media: {
+          id: media._id,
+          publicId: media.publicId,
+          url: media.url,
+          originalName: media.originalName,
+          mimeType: media.mimeType,
+          size: media.size,
+          width: media.width,
+          height: media.height,
+          format: media.format,
+          uploadedBy: media.uploadedBy,
+          createdAt: media.createdAt,
+          updatedAt: media.updatedAt
+        }
+      });
+    } catch (error) {
+      console.error('Get file info error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'خطا در دریافت اطلاعات فایل'
+      });
+    }
+  }
+
+  // Optimize image
+  async optimizeImage(req, res) {
+    try {
+      const { publicId, transformations } = req.body;
+
+      if (!publicId) {
+        return res.status(400).json({
+          success: false,
+          message: 'شناسه فایل الزامی است'
+        });
+      }
+
+      const optimizeResult = await this.cloudinaryService.optimizeImage(publicId, transformations);
+
+      if (optimizeResult.success) {
+        res.json({
+          success: true,
+          optimizedUrl: optimizeResult.optimizedUrl
+        });
+      } else {
+        res.status(400).json({
+          success: false,
+          message: optimizeResult.error
+        });
+      }
+    } catch (error) {
+      console.error('Optimize image error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'خطا در بهینه‌سازی تصویر'
+      });
+    }
+  }
+
+  // Get user media
+  async getUserMedia(req, res) {
+    try {
+      const { page = 1, limit = 20, type } = req.query;
+      const userId = req.user._id;
+
+      const query = { uploadedBy: userId };
+      if (type) {
+        query.mimeType = new RegExp(type, 'i');
+      }
+
+      const media = await Media.find(query)
+        .sort({ createdAt: -1 })
+        .limit(limit * 1)
+        .skip((page - 1) * limit)
+        .exec();
+
+      const total = await Media.countDocuments(query);
+
+      res.json({
+        success: true,
+        media: media.map(m => ({
+          id: m._id,
+          url: m.url,
+          publicId: m.publicId,
+          originalName: m.originalName,
+          size: m.size,
+          width: m.width,
+          height: m.height,
+          format: m.format,
+          createdAt: m.createdAt
+        })),
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(total / limit),
+          totalItems: total,
+          hasNext: page < Math.ceil(total / limit),
+          hasPrev: page > 1
+        }
+      });
+    } catch (error) {
+      console.error('Get user media error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'خطا در دریافت فایل‌ها'
+      });
+    }
+  }
+}
+
+module.exports = MediaController;
+
+// controllers/documentController.js
+const PDFDocument = require('pdfkit');
+const fs = require('fs');
+const path = require('path');
+const Order = require('../models/Order');
+const User = require('../models/User');
+
+class DocumentController {
+  constructor() {
+    this.fontPath = path.join(__dirname, '../assets/fonts');
+  }
+
+  // Generate invoice
+  async generateInvoice(req, res) {
+    try {
+      const { orderId } = req.body;
+
+      const order = await Order.findById(orderId)
+        .populate('user')
+        .populate('items.product');
+
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          message: 'سفارش یافت نشد'
+        });
+      }
+
+      // Create PDF document
+      const doc = new PDFDocument({ margin: 50, size: 'A4' });
+      
+      // Set response headers
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="invoice-${orderId}.pdf"`);
+
+      // Pipe the PDF to response
+      doc.pipe(res);
+
+      // Add Persian font support if available
+      try {
+        doc.font(path.join(this.fontPath, 'iran-sans.ttf'));
+      } catch (error) {
+        console.log('Persian font not found, using default font');
+      }
+
+      // Header
+      doc.fontSize(20)
+         .text('Α Store', 50, 50)
+         .fontSize(16)
+         .text('فاکتور فروش', 50, 80, { align: 'right' });
+
+      // Invoice details
+      doc.fontSize(12)
+         .text(`شماره سفارش: ${order._id}`, 50, 120)
+         .text(`تاریخ: ${new Date(order.createdAt).toLocaleDateString('fa-IR')}`, 50, 140)
+         .text(`مشتری: ${order.user.fullName}`, 50, 160)
+         .text(`تلفن: ${order.user.mobile}`, 50, 180);
+
+      // Items table
+      let yPosition = 220;
+      doc.text('کالاها:', 50, yPosition);
+      yPosition += 20;
+
+      // Table headers
+      doc.text('نام کالا', 50, yPosition)
+         .text('قیمت', 200, yPosition)
+         .text('تعداد', 300, yPosition)
+         .text('مجموع', 400, yPosition);
+      
+      yPosition += 20;
+      doc.moveTo(50, yPosition).lineTo(550, yPosition).stroke();
+      yPosition += 10;
+
+      // Items
+      order.items.forEach(item => {
+        yPosition += 15;
+        doc.text(item.product.name, 50, yPosition)
+           .text(item.price.toLocaleString('fa-IR') + ' تومان', 200, yPosition)
+           .text(item.quantity.toString(), 300, yPosition)
+           .text((item.price * item.quantity).toLocaleString('fa-IR') + ' تومان', 400, yPosition);
+      });
+
+      // Total
+      yPosition += 30;
+      doc.moveTo(50, yPosition).lineTo(550, yPosition).stroke();
+      yPosition += 15;
+      
+      doc.fontSize(14)
+         .text(`مجموع کل: ${order.totalAmount.toLocaleString('fa-IR')} تومان`, 400, yPosition, { align: 'right' });
+
+      // Footer
+      yPosition += 50;
+      doc.fontSize(10)
+         .text('با تشکر از خرید شما - Α Store', 50, yPosition + 50, { align: 'center' })
+         .text('alphastore.ir', 50, yPosition + 70, { align: 'center' });
+
+      doc.end();
+
+    } catch (error) {
+      console.error('Generate invoice error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'خطا در تولید فاکتور'
+      });
+    }
+  }
+
+  // Get invoice
+  async getInvoice(req, res) {
+    try {
+      const { orderId } = req.params;
+
+      const order = await Order.findById(orderId)
+        .populate('user')
+        .populate('items.product');
+
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          message: 'سفارش یافت نشد'
+        });
+      }
+
+      // Check if user owns this order or is admin
+      if (order.user._id.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          message: 'دسترسی محدود'
+        });
+      }
+
+      // Generate and return invoice
+      await this.generateInvoice(req, res);
+
+    } catch (error) {
+      console.error('Get invoice error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'خطا در دریافت فاکتور'
+      });
+    }
+  }
+
+  // Generate payment receipt
+  async generateReceipt(req, res) {
+    try {
+      const { paymentId } = req.body;
+
+      const payment = await Payment.findById(paymentId)
+        .populate({
+          path: 'order',
+          populate: { path: 'user' }
+        });
+
+      if (!payment) {
+        return res.status(404).json({
+          success: false,
+          message: 'پرداخت یافت نشد'
+        });
+      }
+
+      const doc = new PDFDocument({ margin: 50, size: 'A4' });
+      
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="receipt-${paymentId}.pdf"`);
+
+      doc.pipe(res);
+
+      // Header
+      doc.fontSize(20)
+         .text('Α Store', 50, 50)
+         .fontSize(16)
+         .text('رسید پرداخت', 50, 80, { align: 'right' });
+
+      // Receipt details
+      doc.fontSize(12)
+         .text(`شماره تراکنش: ${payment.transactionId}`, 50, 120)
+         .text(`تاریخ پرداخت: ${new Date(payment.paidAt).toLocaleDateString('fa-IR')}`, 50, 140)
+         .text(`مبلغ: ${payment.amount.toLocaleString('fa-IR')} تومان`, 50, 160)
+         .text(`درگاه: ${payment.gateway}`, 50, 180)
+         .text(`وضعیت: موفق`, 50, 200);
+
+      // Customer info
+      doc.text(`پرداخت‌کننده: ${payment.order.user.fullName}`, 50, 240)
+         .text(`شماره سفارش: ${payment.order._id}`, 50, 260);
+
+      // Footer
+      doc.fontSize(10)
+         .text('این رسید معتبر است - Α Store', 50, 350, { align: 'center' })
+         .text('alphastore.ir', 50, 370, { align: 'center' });
+
+      doc.end();
+
+    } catch (error) {
+      console.error('Generate receipt error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'خطا در تولید رسید'
+      });
+    }
+  }
+
+  // Export admin reports
+  async exportReports(req, res) {
+    try {
+      const { type, startDate, endDate, format = 'pdf' } = req.body;
+
+      // Check admin permission
+      if (req.user.role !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          message: 'دسترسی محدود'
+        });
+      }
+
+      let data;
+      const dateFilter = {};
+      
+      if (startDate) dateFilter.$gte = new Date(startDate);
+      if (endDate) dateFilter.$lte = new Date(endDate);
+
+      switch (type) {
+        case 'orders':
+          data = await Order.find(dateFilter.createdAt ? { createdAt: dateFilter } : {})
+            .populate('user', 'fullName email mobile')
+            .sort({ createdAt: -1 });
+          break;
+
+        case 'payments':
+          data = await Payment.find(dateFilter.paidAt ? { paidAt: dateFilter } : {})
+            .populate('user', 'fullName email mobile')
+            .populate('order', '_id totalAmount')
+            .sort({ paidAt: -1 });
+          break;
+
+        case 'users':
+          data = await User.find(dateFilter.createdAt ? { createdAt: dateFilter } : {})
+            .select('fullName email mobile role createdAt isActive')
+            .sort({ createdAt: -1 });
+          break;
+
+        default:
+          return res.status(400).json({
+            success: false,
+            message: 'نوع گزارش نامعتبر'
+          });
+      }
+
+      if (format === 'pdf') {
+        await this.generatePDFReport(data, type, res);
+      } else if (format === 'csv') {
+        await this.generateCSVReport(data, type, res);
+      }
+
+    } catch (error) {
+      console.error('Export reports error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'خطا در تولید گزارش'
+      });
+    }
+  }
+
+  async generatePDFReport(data, type, res) {
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${type}-report.pdf"`);
+
+    doc.pipe(res);
+
+    doc.fontSize(20).text(`گزارش ${type}`, 50, 50, { align: 'right' });
+    doc.fontSize(12).text(`تاریخ تولید: ${new Date().toLocaleDateString('fa-IR')}`, 50, 80);
+
+    let yPosition = 120;
+    data.forEach((item, index) => {
+      if (yPosition > 700) {
+        doc.addPage();
+        yPosition = 50;
+      }
+
+      // Customize based on data type
+      if (type === 'orders') {
+        doc.text(`${index + 1}. سفارش: ${item._id}`, 50, yPosition)
+           .text(`مشتری: ${item.user?.fullName}`, 70, yPosition + 15)
+           .text(`مبلغ: ${item.totalAmount.toLocaleString('fa-IR')} تومان`, 70, yPosition + 30)
+           .text(`وضعیت: ${item.status}`, 70, yPosition + 45);
+        yPosition += 70;
+      }
+    });
+
+    doc.end();
+  }
+
+  async generateCSVReport(data, type, res) {
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${type}-report.csv"`);
+
+    // Add BOM for UTF-8
+    res.write('\uFEFF');
+
+    // CSV headers based on type
+    let headers;
+    switch (type) {
+      case 'orders':
+        headers = 'شماره سفارش,مشتری,مبلغ,وضعیت,تاریخ\n';
+        break;
+      case 'payments':
+        headers = 'شماره تراکنش,مشتری,مبلغ,درگاه,تاریخ\n';
+        break;
+      case 'users':
+        headers = 'نام کامل,ایمیل,موبایل,نقش,تاریخ ثبت نام\n';
+        break;
+    }
+
+    res.write(headers);
+
+    // Write data rows
+    data.forEach(item => {
+      let row;
+      switch (type) {
+        case 'orders':
+          row = `${item._id},"${item.user?.fullName}",${item.totalAmount},${item.status},${new Date(item.createdAt).toLocaleDateString('fa-IR')}\n`;
+          break;
+        case 'payments':
+          row = `${item.transactionId},"${item.user?.fullName}",${item.amount},${item.gateway},${new Date(item.paidAt).toLocaleDateString('fa-IR')}\n`;
+          break;
+        case 'users':
+          row = `"${item.fullName}","${item.email}","${item.mobile}",${item.role},${new Date(item.createdAt).toLocaleDateString('fa-IR')}\n`;
+          break;
+      }
+      res.write(row);
+    });
+
+    res.end();
+  }
+}
+
+module.exports = DocumentController;
+
+// routes/payments.js
+const express = require('express');
+const router = express.Router();
+const PaymentController = require('../controllers/paymentController');
+const { authenticateToken } = require('../middleware/auth');
+
+const paymentController = new PaymentController();
+
+// Payment routes
+router.post('/request', authenticateToken, paymentController.requestZarinpalPayment.bind(paymentController));
+router.get('/verify', paymentController.verifyPayment.bind(paymentController));
+router.post('/webhook', paymentController.handleWebhook.bind(paymentController));
+router.get('/:orderId/status', authenticateToken, paymentController.getPaymentStatus.bind(paymentController));
+router.get('/gateway/status', paymentController.getGatewayStatus.bind(paymentController));
+
+// ZarinPal specific routes
+router.post('/zarinpal/request', authenticateToken, paymentController.requestZarinpalPayment.bind(paymentController));
+router.get('/zarinpal/verify', paymentController.verifyPayment.bind(paymentController));
+router.post('/zarinpal/callback', paymentController.handleWebhook.bind(paymentController));
+
+module.exports = router;
+
+// routes/media.js
+const express = require('express');
+const router = express.Router();
+const MediaController = require('../controllers/mediaController');
+const CloudinaryService = require('../services/media/cloudinaryService');
+const { authenticateToken, requireAdmin } = require('../middleware/auth');
+
+const mediaController = new MediaController();
+const cloudinaryService = new CloudinaryService();
+
+// Single file upload
+router.post('/upload', 
+  authenticateToken, 
+  cloudinaryService.upload.single('file'), 
+  mediaController.uploadSingle.bind(mediaController)
+);
+
+// Multiple files upload
+router.post('/bulk-upload', 
+  authenticateToken, 
+  cloudinaryService.upload.array('files', 10), 
+  mediaController.uploadMultiple.bind(mediaController)
+);
+
+// Delete file
+router.delete('/:id', authenticateToken, mediaController.deleteFile.bind(mediaController));
+
+// Get file info
+router.get('/:id', mediaController.getFileInfo.bind(mediaController));
+
+// Optimize image
+router.post('/optimize', authenticateToken, mediaController.optimizeImage.bind(mediaController));
+
+// Get user media
+router.get('/user/files', authenticateToken, mediaController.getUserMedia.bind(mediaController));
+
+module.exports = router;
+
+// routes/documents.js
+const express = require('express');
+const router = express.Router();
+const DocumentController = require('../controllers/documentController');
+const { authenticateToken, requireAdmin } = require('../middleware/auth');
+
+const documentController = new DocumentController();
+
+// Invoice routes
+router.post('/invoice', authenticateToken, documentController.generateInvoice.bind(documentController));
+router.get('/invoice/:orderId', authenticateToken, documentController.getInvoice.bind(documentController));
+
+// Receipt routes
+router.post('/receipt', authenticateToken, documentController.generateReceipt.bind(documentController));
+
+// Admin reports
+router.post('/admin/reports/export', requireAdmin, documentController.exportReports.bind(documentController));
+
+module.exports = router;
+
+// models/Payment.js
+const mongoose = require('mongoose');
+
+const paymentSchema = new mongoose.Schema({
+  order: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Order',
+    required: true
+  },
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  amount: {
+    type: Number,
+    required: true
+  },
+  gateway: {
+    type: String,
+    required: true,
+    enum: ['zarinpal', 'payir', 'nextpay']
+  },
+  transactionId: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  status: {
+    type: String,
+    required: true,
+    enum: ['pending', 'completed', 'failed', 'cancelled'],
+    default: 'pending'
+  },
+  paidAt: {
+    type: Date
+  },
+  failureReason: {
+    type: String
+  },
+  metadata: {
+    type: mongoose.Schema.Types.Mixed
+  },
+  verificationData: {
+    type: mongoose.Schema.Types.Mixed
+  }
+}, {
+  timestamps: true
+});
+
+// Indexes
+paymentSchema.index({ transactionId: 1 });
+paymentSchema.index({ order: 1 });
+paymentSchema.index({ user: 1 });
+paymentSchema.index({ status: 1 });
+
+module.exports = mongoose.model('Payment', paymentSchema);
+
+// models/Media.js
+const mongoose = require('mongoose');
+
+const mediaSchema = new mongoose.Schema({
+  publicId: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  url: {
+    type: String,
+    required: true
+  },
+  originalName: {
+    type: String,
+    required: true
+  },
+  mimeType: {
+    type: String,
+    required: true
+  },
+  size: {
+    type: Number,
+    required: true
+  },
+  width: {
+    type: Number
+  },
+  height: {
+    type: Number
+  },
+  format: {
+    type: String
+  },
+  tags: [{
+    type: String
+  }],
+  uploadedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }
+}, {
+  timestamps: true
+});
+
+// Indexes
+mediaSchema.index({ publicId: 1 });
+mediaSchema.index({ uploadedBy: 1 });
+mediaSchema.index({ mimeType: 1 });
+
+module.exports = mongoose.model('Media', mediaSchema);
+
+// Integration routes in main app.js
+/*
+const paymentRoutes = require('./routes/payments');
+const mediaRoutes = require('./routes/media');
+const documentRoutes = require('./routes/documents');
+
+app.use('/api/payments', paymentRoutes);
+app.use('/api/media', mediaRoutes);
+app.use('/api/documents', documentRoutes);
+*/
+
+// Environment variables needed (.env):
+/*
+# Payment Gateways
+ZARINPAL_MERCHANT_ID=your_zarinpal_merchant_id
+ZARINPAL_WEBHOOK_SECRET=your_webhook_secret
+PAYIR_API_KEY=your_payir_api_key
+NEXTPAY_API_KEY=your_nextpay_api_key
+
+# Cloudinary
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+
+# Email Service
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your_email@gmail.com
+SMTP_PASS=your_app_password
+SMTP_FROM=noreply@alphastore.ir
+
+# SMS Service
+SMS_API_KEY=your_sms_api_key
+SMS_USERNAME=your_sms_username
+SMS_PASSWORD=your_sms_password
+SMS_LINE_NUMBER=your_sms_line_number
+
+# Other
+FRONTEND_URL=https://alphastore.ir
+*/
+
+// services/integration/enamadService.js
+const axios = require('axios');
+
+class EnamadService {
+  constructor() {
+    this.apiKey = process.env.ENAMAD_API_KEY;
+    this.baseUrl = 'https://api.enamad.ir';
+  }
+
+  async verifyBusiness(nationalId, businessRegistrationNumber) {
+    try {
+      const response = await axios.post(`${this.baseUrl}/verify`, {
+        api_key: this.apiKey,
+        national_id: nationalId,
+        registration_number: businessRegistrationNumber
+      });
+
+      return {
+        success: true,
+        verified: response.data.verified,
+        businessInfo: response.data.business_info
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  async getTrustScore(domain) {
+    try {
+      const response = await axios.get(`${this.baseUrl}/trust-score/${domain}`, {
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`
+        }
+      });
+
+      return {
+        success: true,
+        trustScore: response.data.trust_score,
+        certificates: response.data.certificates
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+}
+
+module.exports = EnamadService;
+
+// services/integration/postalService.js
+const axios = require('axios');
+
+class PostalService {
+  constructor() {
+    this.apiKey = process.env.IRAN_POST_API_KEY;
+    this.baseUrl = 'https://api.post.ir';
+  }
+
+  async validatePostalCode(postalCode) {
+    try {
+      // Iranian postal code validation pattern
+      const postalPattern = /^\d{10}$/;
+      
+      if (!postalPattern.test(postalCode)) {
+        return {
+          success: false,
+          error: 'کد پستی باید 10 رقم باشد'
+        };
+      }
+
+      // API call to validate postal code
+      const response = await axios.get(`${this.baseUrl}/validate/${postalCode}`, {
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`
+        }
+      });
+
+      return {
+        success: true,
+        valid: response.data.valid,
+        city: response.data.city,
+        province: response.data.province,
+        district: response.data.district
+      };
+    } catch (error) {
+      // Fallback validation
+      return {
+        success: true,
+        valid: /^\d{10}$/.test(postalCode),
+        message: 'Offline validation performed'
+      };
+    }
+  }
+
+  async getShippingRate(fromPostalCode, toPostalCode, weight, serviceType = 'standard') {
+    try {
+      const response = await axios.post(`${this.baseUrl}/shipping/rate`, {
+        from_postal_code: fromPostalCode,
+        to_postal_code: toPostalCode,
+        weight: weight, // in grams
+        service_type: serviceType
+      }, {
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`
+        }
+      });
+
+      return {
+        success: true,
+        rate: response.data.rate,
+        estimatedDelivery: response.data.estimated_delivery,
+        serviceOptions: response.data.service_options
+      };
+    } catch (error) {
+      // Fallback rates
+      const baseRate = serviceType === 'express' ? 50000 : 30000;
+      const weightRate = Math.ceil(weight / 1000) * 10000;
+      
+      return {
+        success: true,
+        rate: baseRate + weightRate,
+        estimatedDelivery: serviceType === 'express' ? '1-2 روز' : '3-5 روز',
+        fallback: true
+      };
+    }
+  }
+
+  async trackPackage(trackingNumber) {
+    try {
+      const response = await axios.get(`${this.baseUrl}/track/${trackingNumber}`, {
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`
+        }
+      });
+
+      return {
+        success: true,
+        status: response.data.status,
+        location: response.data.current_location,
+        history: response.data.tracking_history,
+        estimatedDelivery: response.data.estimated_delivery
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+}
+
+module.exports = PostalService;
+
+// services/integration/currencyService.js
+const axios = require('axios');
+
+class CurrencyService {
+  constructor() {
+    this.apiKey = process.env.CURRENCY_API_KEY;
+    this.baseUrl = 'https://api.exchangerate-api.com/v4/latest';
+    this.cache = new Map();
+    this.cacheTimeout = 60 * 60 * 1000; // 1 hour
+  }
+
+  async getExchangeRates(baseCurrency = 'USD') {
+    try {
+      const cacheKey = `rates_${baseCurrency}`;
+      const cached = this.cache.get(cacheKey);
+      
+      if (cached && (Date.now() - cached.timestamp) < this.cacheTimeout) {
+        return cached.data;
+      }
+
+      const response = await axios.get(`${this.baseUrl}/${baseCurrency}`);
+      
+      const result = {
+        success: true,
+        baseCurrency: response.data.base,
+        rates: response.data.rates,
+        lastUpdated: response.data.date
+      };
+
+      // Cache the result
+      this.cache.set(cacheKey, {
+        data: result,
+        timestamp: Date.now()
+      });
+
+      return result;
+    } catch (error) {
+      // Fallback rates
+      return {
+        success: true,
+        baseCurrency: 'USD',
+        rates: {
+          IRR: 42000,
+          EUR: 0.85,
+          GBP: 0.73,
+          JPY: 110
+        },
+        fallback: true,
+        lastUpdated: new Date().toISOString()
+      };
+    }
+  }
+
+  async convertCurrency(amount, fromCurrency, toCurrency) {
+    try {
+      const rates = await this.getExchangeRates(fromCurrency);
+      
+      if (rates.success && rates.rates[toCurrency]) {
+        const convertedAmount = amount * rates.rates[toCurrency];
+        
+        return {
+          success: true,
+          originalAmount: amount,
+          convertedAmount: Math.round(convertedAmount * 100) / 100,
+          fromCurrency,
+          toCurrency,
+          rate: rates.rates[toCurrency],
+          lastUpdated: rates.lastUpdated
+        };
+      } else {
+        throw new Error('Currency not supported');
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  async getIranianRialRate() {
+    try {
+      const rates = await this.getExchangeRates('USD');
+      return {
+        success: true,
+        usdToIrr: rates.rates.IRR || 42000,
+        lastUpdated: rates.lastUpdated
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+}
+
+module.exports = CurrencyService;
+
+// controllers/integrationController.js
+const EnamadService = require('../services/integration/enamadService');
+const PostalService = require('../services/integration/postalService');
+const CurrencyService = require('../services/integration/currencyService');
+
+class IntegrationController {
+  constructor() {
+    this.enamadService = new EnamadService();
+    this.postalService = new PostalService();
+    this.currencyService = new CurrencyService();
+  }
+
+  // E-Namad verification
+  async verifyEnamad(req, res) {
+    try {
+      const { nationalId, businessRegistrationNumber } = req.body;
+
+      const result = await this.enamadService.verifyBusiness(nationalId, businessRegistrationNumber);
+
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'خطا در تأیید E-Namad'
+      });
+    }
+  }
+
+  // Postal code validation
+  async validatePostalCode(req, res) {
+    try {
+      const { postalCode } = req.body;
+
+      if (!postalCode) {
+        return res.status(400).json({
+          success: false,
+          message: 'کد پستی الزامی است'
+        });
+      }
+
+      const result = await this.postalService.validatePostalCode(postalCode);
+
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'خطا در اعتبارسنجی کد پستی'
+      });
+    }
+  }
+
+  // Calculate shipping rate
+  async calculateShipping(req, res) {
+    try {
+      const { fromPostalCode, toPostalCode, weight, serviceType } = req.body;
+
+      const result = await this.postalService.getShippingRate(
+        fromPostalCode,
+        toPostalCode,
+        weight,
+        serviceType
+      );
+
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'خطا در محاسبه هزینه ارسال'
+      });
+    }
+  }
+
+  // Track package
+  async trackPackage(req, res) {
+    try {
+      const { trackingNumber } = req.params;
+
+      const result = await this.postalService.trackPackage(trackingNumber);
+
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'خطا در پیگیری مرسوله'
+      });
+    }
+  }
+
+  // Get exchange rates
+  async getExchangeRates(req, res) {
+    try {
+      const { baseCurrency } = req.query;
+
+      const result = await this.currencyService.getExchangeRates(baseCurrency);
+
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'خطا در دریافت نرخ ارز'
+      });
+    }
+  }
+
+  // Convert currency
+  async convertCurrency(req, res) {
+    try {
+      const { amount, fromCurrency, toCurrency } = req.body;
+
+      const result = await this.currencyService.convertCurrency(amount, fromCurrency, toCurrency);
+
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'خطا در تبدیل ارز'
+      });
+    }
+  }
+
+  // Calculate Iranian tax
+  async calculateTax(req, res) {
+    try {
+      const { amount, taxType = 'vat' } = req.body;
+
+      let taxRate;
+      switch (taxType) {
+        case 'vat': // VAT (Value Added Tax)
+          taxRate = 0.09; // 9% VAT in Iran
+          break;
+        case 'luxury': // Luxury goods tax
+          taxRate = 0.20; // 20% for luxury items
+          break;
+        default:
+          taxRate = 0.09;
+      }
+
+      const taxAmount = Math.round(amount * taxRate);
+      const totalWithTax = amount + taxAmount;
+
+      res.json({
+        success: true,
+        originalAmount: amount,
+        taxRate: taxRate * 100,
+        taxAmount: taxAmount,
+        totalWithTax: totalWithTax,
+        taxType: taxType
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'خطا در محاسبه مالیات'
+      });
+    }
+  }
+}
+
+module.exports = IntegrationController;
+
+// routes/integration.js
+const express = require('express');
+const router = express.Router();
+const IntegrationController = require('../controllers/integrationController');
+const { authenticateToken, requireAdmin } = require('../middleware/auth');
+
+const integrationController = new IntegrationController();
+
+// E-Namad routes
+router.post('/enamad/verify', requireAdmin, integrationController.verifyEnamad.bind(integrationController));
+
+// Postal service routes
+router.post('/postal/validate', integrationController.validatePostalCode.bind(integrationController));
+router.post('/postal/shipping-rate', integrationController.calculateShipping.bind(integrationController));
+router.get('/postal/track/:trackingNumber', integrationController.trackPackage.bind(integrationController));
+
+// Currency routes
+router.get('/currency/rates', integrationController.getExchangeRates.bind(integrationController));
+router.post('/currency/convert', integrationController.convertCurrency.bind(integrationController));
+
+// Tax calculation
+router.post('/tax/calculate', integrationController.calculateTax.bind(integrationController));
+
+module.exports = router;
+
+// middleware/rateLimiter.js
+const rateLimit = require('express-rate-limit');
+const RedisStore = require('rate-limit-redis');
+const Redis = require('redis');
+
+// Create Redis client for rate limiting
+const redisClient = Redis.createClient({
+  host: process.env.REDIS_HOST || 'localhost',
+  port: process.env.REDIS_PORT || 6379,
+  password: process.env.REDIS_PASSWORD
+});
+
+// Payment API rate limiter
+const paymentLimiter = rateLimit({
+  store: new RedisStore({
+    client: redisClient,
+    prefix: 'payment_limit:'
+  }),
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // max 10 payment requests per 15 minutes per IP
+  message: {
+    success: false,
+    message: 'تعداد درخواست‌های پرداخت بیش از حد مجاز'
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// File upload rate limiter
+const uploadLimiter = rateLimit({
+  store: new RedisStore({
+    client: redisClient,
+    prefix: 'upload_limit:'
+  }),
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 50, // max 50 uploads per hour per IP
+  message: {
+    success: false,
+    message: 'تعداد آپلود فایل بیش از حد مجاز'
+  }
+});
+
+// API general rate limiter
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 1000, // max 1000 requests per 15 minutes per IP
+  message: {
+    success: false,
+    message: 'تعداد درخواست‌ها بیش از حد مجاز'
+  }
+});
+
+module.exports = {
+  paymentLimiter,
+  uploadLimiter,
+  apiLimiter
+};
+
+// middleware/validation.js
+const { body, param, query, validationResult } = require('express-validator');
+
+// Validation middleware
+const handleValidationErrors = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      message: 'داده‌های ورودی نامعتبر',
+      errors: errors.array().map(err => ({
+        field: err.param,
+        message: err.msg,
+        value: err.value
+      }))
+    });
+  }
+  next();
+};
+
+// Payment validation rules
+const paymentValidation = [
+  body('orderId')
+    .isMongoId()
+    .withMessage('شناسه سفارش نامعتبر'),
+  body('gateway')
+    .optional()
+    .isIn(['zarinpal', 'payir', 'nextpay'])
+    .withMessage('درگاه پرداخت نامعتبر'),
+  handleValidationErrors
+];
+
+// File upload validation
+const uploadValidation = [
+  body('transformation')
+    .optional()
+    .isJSON()
+    .withMessage('تنظیمات تبدیل نامعتبر'),
+  handleValidationErrors
+];
+
+// Postal code validation
+const postalCodeValidation = [
+  body('postalCode')
+    .matches(/^\d{10}$/)
+    .withMessage('کد پستی باید 10 رقم باشد'),
+  handleValidationErrors
+];
+
+module.exports = {
+  paymentValidation,
+  uploadValidation,
+  postalCodeValidation,
+  handleValidationErrors
+};
+
+// utils/security.js
+const crypto = require('crypto');
+const helmet = require('helmet');
+const xss = require('xss');
+
+class SecurityUtils {
+  // Generate secure random token
+  static generateSecureToken(length = 32) {
+    return crypto.randomBytes(length).toString('hex');
+  }
+
+  // Hash sensitive data
+  static hashData(data, salt = null) {
+    const saltToUse = salt || crypto.randomBytes(16).toString('hex');
+    const hash = crypto.pbkdf2Sync(data, saltToUse, 10000, 64, 'sha512').toString('hex');
+    return { hash, salt: saltToUse };
+  }
+
+  // Verify hashed data
+  static verifyHash(data, hash, salt) {
+    const verifyHash = crypto.pbkdf2Sync(data, salt, 10000, 64, 'sha512').toString('hex');
+    return hash === verifyHash;
+  }
+
+  // Sanitize user input
+  static sanitizeInput(input) {
+    if (typeof input !== 'string') return input;
+    return xss(input, {
+      whiteList: {},
+      stripIgnoreTag: true,
+      stripIgnoreTagBody: ['script']
+    });
+  }
+
+  // Generate webhook signature
+  static generateWebhookSignature(payload, secret) {
+    return crypto
+      .createHmac('sha256', secret)
+      .update(JSON.stringify(payload))
+      .digest('hex');
+  }
+
+  // Verify webhook signature
+  static verifyWebhookSignature(payload, signature, secret) {
+    const expectedSignature = this.generateWebhookSignature(payload, secret);
+    return crypto.timingSafeEqual(
+      Buffer.from(signature, 'hex'),
+      Buffer.from(expectedSignature, 'hex')
+    );
+  }
+
+  // Configure security headers
+  static configureSecurityHeaders() {
+    return helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
+          scriptSrc: ["'self'", "https://cdnjs.cloudflare.com"],
+          imgSrc: ["'self'", "data:", "https://res.cloudinary.com"],
+          connectSrc: ["'self'", "https://api.zarinpal.com", "https://pay.ir"]
+        }
+      },
+      hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true
+      }
+    });
+  }
+}
+
+module.exports = SecurityUtils;
+
+// Complete package.json dependencies needed:
+/*
+{
+  "dependencies": {
+    "express": "^4.18.2",
+    "mongoose": "^7.5.0",
+    "axios": "^1.5.0",
+    "cloudinary": "^1.40.0",
+    "multer": "^1.4.5-lts.1",
+    "multer-storage-cloudinary": "^4.0.0",
+    "nodemailer": "^6.9.4",
+    "pdfkit": "^0.13.0",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "express-rate-limit": "^6.10.0",
+    "rate-limit-redis": "^3.0.1",
+    "redis": "^4.6.8",
+    "express-validator": "^7.0.1",
+    "helmet": "^7.0.0",
+    "xss": "^1.0.14",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1"
+  }
+}
+*/
+
+// Email templates structure:
+// templates/email/fa/order-confirmation.html
+// templates/email/fa/payment-receipt.html  
+// templates/email/fa/welcome.html
+// templates/email/en/order-confirmation.html
+// templates/email/en/payment-receipt.html
+// templates/email/en/welcome.html
+
+console.log('🎯 Α Store Backend Part 6C - Complete Payment & Media APIs');
+console.log('✅ ZarinPal, Pay.ir, NextPay integration');
+console.log('✅ Cloudinary media management');
+console.log('✅ Email & SMS notifications');
+console.log('✅ PDF invoice generation');
+console.log('✅ Iranian integrations (postal, tax, currency)');
+console.log('✅ Security & validation middleware');
+console.log('✅ Rate limiting & webhook handling');

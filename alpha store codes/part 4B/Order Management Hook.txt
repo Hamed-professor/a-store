@@ -1,0 +1,232 @@
+// src/hooks/useOrder.ts
+import { useState, useCallback, useEffect } from 'react';
+import { Order, OrderStatus, OrderStatusInfo } from '../types/order';
+
+const ORDER_STATUS_INFO: Record<OrderStatus, OrderStatusInfo> = {
+  [OrderStatus.PENDING]: {
+    status: OrderStatus.PENDING,
+    label: 'Pending',
+    labelPersian: 'در انتظار تأیید',
+    color: 'yellow',
+    icon: 'Clock',
+    description: 'سفارش شما در حال بررسی است'
+  },
+  [OrderStatus.CONFIRMED]: {
+    status: OrderStatus.CONFIRMED,
+    label: 'Confirmed',
+    labelPersian: 'تأیید شده',
+    color: 'blue',
+    icon: 'CheckCircle',
+    description: 'سفارش شما تأیید و در حال آماده‌سازی است'
+  },
+  [OrderStatus.PROCESSING]: {
+    status: OrderStatus.PROCESSING,
+    label: 'Processing',
+    labelPersian: 'در حال پردازش',
+    color: 'purple',
+    icon: 'Package',
+    description: 'سفارش شما در حال بسته‌بندی است'
+  },
+  [OrderStatus.SHIPPED]: {
+    status: OrderStatus.SHIPPED,
+    label: 'Shipped',
+    labelPersian: 'ارسال شده',
+    color: 'indigo',
+    icon: 'Truck',
+    description: 'سفارش شما ارسال شده و در مسیر است'
+  },
+  [OrderStatus.DELIVERED]: {
+    status: OrderStatus.DELIVERED,
+    label: 'Delivered',
+    labelPersian: 'تحویل داده شده',
+    color: 'green',
+    icon: 'CheckCheck',
+    description: 'سفارش شما با موفقیت تحویل داده شد'
+  },
+  [OrderStatus.CANCELLED]: {
+    status: OrderStatus.CANCELLED,
+    label: 'Cancelled',
+    labelPersian: 'لغو شده',
+    color: 'red',
+    icon: 'X',
+    description: 'سفارش شما لغو شده است'
+  },
+  [OrderStatus.REFUNDED]: {
+    status: OrderStatus.REFUNDED,
+    label: 'Refunded',
+    labelPersian: 'استردادی',
+    color: 'gray',
+    icon: 'RotateCcw',
+    description: 'وجه سفارش شما عودت داده شد'
+  }
+};
+
+export interface OrderFilters {
+  status?: OrderStatus;
+  dateFrom?: Date;
+  dateTo?: Date;
+  searchQuery?: string;
+}
+
+export const useOrder = () => {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [filters, setFilters] = useState<OrderFilters>({});
+
+  // Mock data for demonstration
+  useEffect(() => {
+    setOrders([
+      {
+        id: '1',
+        orderNumber: 'AS-2024-001',
+        items: [
+          {
+            id: '1',
+            productId: '1',
+            name: 'Persian Carpet',
+            namePersian: 'فرش ایرانی',
+            price: 5000000,
+            quantity: 1,
+            image: '/images/carpet-1.jpg'
+          }
+        ],
+        shippingAddress: {
+          firstName: 'علی',
+          lastName: 'احمدی',
+          phoneNumber: '09123456789',
+          province: 'تهران',
+          city: 'تهران',
+          address: 'خیابان ولیعصر، پلاک 123',
+          postalCode: '1234567890'
+        },
+        billingAddress: {
+          firstName: 'علی',
+          lastName: 'احمدی',
+          phoneNumber: '09123456789',
+          province: 'تهران',
+          city: 'تهران',
+          address: 'خیابان ولیعصر، پلاک 123',
+          postalCode: '1234567890'
+        },
+        shippingMethod: {
+          id: 'standard',
+          name: 'Standard Delivery',
+          namePersian: 'ارسال عادی',
+          price: 50000,
+          estimatedDays: 3,
+          description: 'ارسال در ۳ روز کاری'
+        },
+        paymentMethod: 'zarinpal',
+        subtotal: 5000000,
+        shippingCost: 50000,
+        tax: 450000,
+        total: 5500000,
+        status: OrderStatus.CONFIRMED,
+        createdAt: new Date('2024-12-01'),
+        updatedAt: new Date('2024-12-01'),
+        trackingNumber: 'TR123456789'
+      }
+    ]);
+  }, []);
+
+  const getOrderStatusInfo = useCallback((status: OrderStatus): OrderStatusInfo => {
+    return ORDER_STATUS_INFO[status];
+  }, []);
+
+  const getOrderById = useCallback((orderId: string): Order | undefined => {
+    return orders.find(order => order.id === orderId);
+  }, [orders]);
+
+  const getOrderByNumber = useCallback((orderNumber: string): Order | undefined => {
+    return orders.find(order => order.orderNumber === orderNumber);
+  }, [orders]);
+
+  const updateOrderStatus = useCallback((orderId: string, status: OrderStatus) => {
+    setOrders(prev => prev.map(order => 
+      order.id === orderId 
+        ? { ...order, status, updatedAt: new Date() }
+        : order
+    ));
+  }, []);
+
+  const addTrackingNumber = useCallback((orderId: string, trackingNumber: string) => {
+    setOrders(prev => prev.map(order => 
+      order.id === orderId 
+        ? { ...order, trackingNumber, updatedAt: new Date() }
+        : order
+    ));
+  }, []);
+
+  const createOrder = useCallback((orderData: Omit<Order, 'id' | 'orderNumber' | 'createdAt' | 'updatedAt'>): Order => {
+    const newOrder: Order = {
+      ...orderData,
+      id: Math.random().toString(36).substr(2, 9),
+      orderNumber: `AS-${new Date().getFullYear()}-${(orders.length + 1).toString().padStart(3, '0')}`,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    setOrders(prev => [newOrder, ...prev]);
+    return newOrder;
+  }, [orders.length]);
+
+  const filterOrders = useCallback((filters: OrderFilters) => {
+    setFilters(filters);
+  }, []);
+
+  const getFilteredOrders = useCallback(() => {
+    return orders.filter(order => {
+      if (filters.status && order.status !== filters.status) return false;
+      if (filters.searchQuery) {
+        const query = filters.searchQuery.toLowerCase();
+        if (
+          !order.orderNumber.toLowerCase().includes(query) &&
+          !order.items.some(item => 
+            item.name.toLowerCase().includes(query) || 
+            item.namePersian.includes(query)
+          )
+        ) return false;
+      }
+      if (filters.dateFrom && order.createdAt < filters.dateFrom) return false;
+      if (filters.dateTo && order.createdAt > filters.dateTo) return false;
+      return true;
+    });
+  }, [orders, filters]);
+
+  const cancelOrder = useCallback(async (orderId: string, reason?: string) => {
+    setLoading(true);
+    try {
+      // In real app, make API call
+      updateOrderStatus(orderId, OrderStatus.CANCELLED);
+      return true;
+    } catch (error) {
+      console.error('Failed to cancel order:', error);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, [updateOrderStatus]);
+
+  const reorderItems = useCallback((orderId: string) => {
+    const order = getOrderById(orderId);
+    if (!order) return;
+
+    // In real app, add items to cart
+    console.log('Reordering items:', order.items);
+  }, [getOrderById]);
+
+  return {
+    orders: getFilteredOrders(),
+    loading,
+    getOrderStatusInfo,
+    getOrderById,
+    getOrderByNumber,
+    updateOrderStatus,
+    addTrackingNumber,
+    createOrder,
+    filterOrders,
+    cancelOrder,
+    reorderItems,
+    ORDER_STATUS_INFO
+  };
+};

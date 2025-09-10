@@ -1,0 +1,335 @@
+// src/components/payment/PaymentMethods.tsx
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { CreditCard, Shield, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { PaymentGateway, PaymentFormData, PaymentError } from '../../types/payment';
+import { formatCurrency, calculateTotalAmount, normalizeMobile } from '../../utils/payment';
+
+interface PaymentMethodsProps {
+  gateways: PaymentGateway[];
+  selectedGateway: PaymentGateway | null;
+  amount: number;
+  currency: 'IRR' | 'IRT';
+  isLoading: boolean;
+  isProcessing: boolean;
+  error: PaymentError | null;
+  onGatewaySelect: (gatewayId: string) => void;
+  onSubmitPayment: (formData: PaymentFormData) => void;
+  onClearError: () => void;
+}
+
+const PaymentMethods: React.FC<PaymentMethodsProps> = ({
+  gateways,
+  selectedGateway,
+  amount,
+  currency,
+  isLoading,
+  isProcessing,
+  error,
+  onGatewaySelect,
+  onSubmitPayment,
+  onClearError
+}) => {
+  const [formData, setFormData] = useState<PaymentFormData>({
+    gateway: selectedGateway?.id || '',
+    amount,
+    currency,
+    email: '',
+    mobile: '',
+    acceptTerms: false
+  });
+
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (selectedGateway) {
+      setFormData(prev => ({ ...prev, gateway: selectedGateway.id }));
+    }
+  }, [selectedGateway]);
+
+  useEffect(() => {
+    setFormData(prev => ({ ...prev, amount, currency }));
+  }, [amount, currency]);
+
+  const handleInputChange = (field: string, value: string | boolean) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    
+    // Clear validation error for this field
+    if (validationErrors[field]) {
+      setValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
+    
+    // Clear payment error when user makes changes
+    if (error) {
+      onClearError();
+    }
+  };
+
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    if (!selectedGateway) {
+      errors.gateway = 'لطفاً یک درگاه پرداخت انتخاب کنید';
+    }
+
+    if (formData.mobile && !/^(\+98|0098|98|0)?9\d{9}$/.test(formData.mobile)) {
+      errors.mobile = 'شماره موبایل معتبر نیست';
+    }
+
+    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      errors.email = 'آدرس ایمیل معتبر نیست';
+    }
+
+    if (!formData.acceptTerms) {
+      errors.acceptTerms = 'پذیرش قوانین و مقررات الزامی است';
+    }
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+
+    const processedFormData = {
+      ...formData,
+      mobile: formData.mobile ? normalizeMobile(formData.mobile) : ''
+    };
+
+    onSubmitPayment(processedFormData);
+  };
+
+  const totalAmount = selectedGateway ? calculateTotalAmount(amount, selectedGateway) : amount;
+  const processingFee = selectedGateway ? totalAmount - amount : 0;
+
+  return (
+    <div className="max-w-2xl mx-auto p-6 bg-white rounded-lg shadow-lg" dir="rtl">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-8">
+        <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-r from-purple-500 to-blue-600 rounded-lg">
+          <CreditCard className="w-6 h-6 text-white" />
+        </div>
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">انتخاب روش پرداخت</h2>
+          <p className="text-gray-600">برای تکمیل سفارش، روش پرداخت مورد نظر خود را انتخاب کنید</p>
+        </div>
+      </div>
+
+      {/* Loading State */}
+      {isLoading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+          <span className="mr-3 text-gray-600">در حال بارگذاری درگاه‌های پرداخت...</span>
+        </div>
+      )}
+
+      {/* Error Display */}
+      <AnimatePresence>
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3"
+          >
+            <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-red-800 font-medium">{error.messagePersian}</p>
+              {error.retryable && (
+                <p className="text-red-600 text-sm mt-1">می‌توانید دوباره تلاش کنید</p>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {!isLoading && gateways.length === 0 && (
+        <div className="text-center py-12">
+          <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-600">هیچ درگاه پرداختی در دسترس نیست</p>
+        </div>
+      )}
+
+      {!isLoading && gateways.length > 0 && (
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Payment Gateway Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-3">
+              انتخاب درگاه پرداخت
+            </label>
+            <div className="grid gap-3">
+              {gateways.map((gateway) => (
+                <motion.div
+                  key={gateway.id}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className={`relative p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                    selectedGateway?.id === gateway.id
+                      ? 'border-purple-500 bg-purple-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                  onClick={() => onGatewaySelect(gateway.id)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                        <img
+                          src={gateway.logo}
+                          alt={gateway.namePersian}
+                          className="w-8 h-8 object-contain"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                        <CreditCard className="w-6 h-6 text-gray-500" style={{
+                          display: 'none'
+                        }} />
+                      </div>
+                      <div>
+                        <h3 className="font-medium text-gray-900">{gateway.namePersian}</h3>
+                        <p className="text-sm text-gray-600">{gateway.descriptionPersian}</p>
+                        {gateway.processingFee > 0 && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            کارمزد: {gateway.processingFee}%
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-green-500" />
+                      {selectedGateway?.id === gateway.id && (
+                        <CheckCircle className="w-5 h-5 text-purple-500" />
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+            {validationErrors.gateway && (
+              <p className="text-red-600 text-sm mt-1">{validationErrors.gateway}</p>
+            )}
+          </div>
+
+          {/* Payment Summary */}
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="font-medium text-gray-900 mb-3">خلاصه پرداخت</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-600">مبلغ سفارش:</span>
+                <span className="font-medium">{formatCurrency(amount, currency)}</span>
+              </div>
+              {processingFee > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">کارمزد درگاه:</span>
+                  <span className="font-medium">{formatCurrency(processingFee, currency)}</span>
+                </div>
+              )}
+              <div className="border-t pt-2 flex justify-between text-base font-bold">
+                <span>مبلغ نهایی:</span>
+                <span className="text-purple-600">{formatCurrency(totalAmount, currency)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Contact Information */}
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                شماره موبایل (اختیاری)
+              </label>
+              <input
+                type="tel"
+                value={formData.mobile}
+                onChange={(e) => handleInputChange('mobile', e.target.value)}
+                placeholder="09xxxxxxxxx"
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+                  validationErrors.mobile ? 'border-red-500' : 'border-gray-300'
+                }`}
+                dir="ltr"
+              />
+              {validationErrors.mobile && (
+                <p className="text-red-600 text-sm mt-1">{validationErrors.mobile}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                ایمیل (اختیاری)
+              </label>
+              <input
+                type="email"
+                value={formData.email}
+                onChange={(e) => handleInputChange('email', e.target.value)}
+                placeholder="example@email.com"
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+                  validationErrors.email ? 'border-red-500' : 'border-gray-300'
+                }`}
+                dir="ltr"
+              />
+              {validationErrors.email && (
+                <p className="text-red-600 text-sm mt-1">{validationErrors.email}</p>
+              )}
+            </div>
+          </div>
+
+          {/* Terms and Conditions */}
+          <div className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              id="acceptTerms"
+              checked={formData.acceptTerms}
+              onChange={(e) => handleInputChange('acceptTerms', e.target.checked)}
+              className="mt-1 w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+            />
+            <label htmlFor="acceptTerms" className="text-sm text-gray-700 leading-5">
+              <span className={validationErrors.acceptTerms ? 'text-red-600' : ''}>
+                قوانین و مقررات α Store و شرایط پرداخت را مطالعه کرده و می‌پذیرم
+              </span>
+            </label>
+          </div>
+          {validationErrors.acceptTerms && (
+            <p className="text-red-600 text-sm">{validationErrors.acceptTerms}</p>
+          )}
+
+          {/* Submit Button */}
+          <motion.button
+            type="submit"
+            disabled={!selectedGateway || isProcessing}
+            whileHover={!isProcessing ? { scale: 1.02 } : {}}
+            whileTap={!isProcessing ? { scale: 0.98 } : {}}
+            className={`w-full py-4 rounded-lg font-medium text-lg transition-all ${
+              !selectedGateway || isProcessing
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:shadow-lg'
+            }`}
+          >
+            {isProcessing ? (
+              <div className="flex items-center justify-center gap-3">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span>در حال انتقال به درگاه...</span>
+              </div>
+            ) : (
+              `پرداخت ${formatCurrency(totalAmount, currency)}`
+            )}
+          </motion.button>
+
+          {/* Security Notice */}
+          <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
+            <Shield className="w-4 h-4 text-green-500" />
+            <span>پرداخت شما با بالاترین سطح امنیت محافظت می‌شود</span>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+};
+
+export default PaymentMethods;

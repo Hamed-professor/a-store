@@ -1,0 +1,343 @@
+// src/components/product/CategoryCard.tsx
+
+import React, { useState } from 'react';
+import { ArrowLeft, ArrowRight, Package } from 'lucide-react';
+import { Category } from '../../types/product';
+import { toPersianDigits } from '../../utils/currency';
+import { handleImageError } from '../../utils/images';
+
+interface CategoryCardProps {
+  category: Category;
+  locale?: 'fa' | 'en';
+  size?: 'sm' | 'md' | 'lg';
+  className?: string;
+  onClick?: (category: Category) => void;
+  showProductCount?: boolean;
+  showHoverEffects?: boolean;
+}
+
+const CategoryCard: React.FC<CategoryCardProps> = ({
+  category,
+  locale = 'fa',
+  size = 'md',
+  className = '',
+  onClick,
+  showProductCount = true,
+  showHoverEffects = true
+}) => {
+  const [imageLoading, setImageLoading] = useState(true);
+  const [imageError, setImageError] = useState(false);
+
+  // Size configurations
+  const sizeConfigs = {
+    sm: {
+      container: 'h-32',
+      title: 'text-sm font-semibold',
+      description: 'text-xs',
+      count: 'text-xs',
+      padding: 'p-3'
+    },
+    md: {
+      container: 'h-48',
+      title: 'text-lg font-bold',
+      description: 'text-sm',
+      count: 'text-sm',
+      padding: 'p-4'
+    },
+    lg: {
+      container: 'h-64',
+      title: 'text-xl font-bold',
+      description: 'text-base',
+      count: 'text-base',
+      padding: 'p-6'
+    }
+  };
+
+  const config = sizeConfigs[size];
+
+  const handleClick = () => {
+    if (onClick) {
+      onClick(category);
+    }
+  };
+
+  const ArrowIcon = locale === 'fa' ? ArrowLeft : ArrowRight;
+
+  return (
+    <div
+      className={`
+        group relative overflow-hidden rounded-xl cursor-pointer
+        transition-all duration-500 transform-gpu
+        ${showHoverEffects ? 'hover:scale-105 hover:shadow-2xl' : ''}
+        ${config.container}
+        ${className}
+      `}
+      onClick={handleClick}
+    >
+      {/* Background Image */}
+      <div className="absolute inset-0">
+        {category.image && !imageError ? (
+          <img
+            src={category.image.url}
+            alt={category.image.alt}
+            className={`
+              w-full h-full object-cover transition-all duration-700
+              ${showHoverEffects ? 'group-hover:scale-110' : ''}
+              ${imageLoading ? 'opacity-0' : 'opacity-100'}
+            `}
+            onLoad={() => setImageLoading(false)}
+            onError={(e) => {
+              setImageError(true);
+              setImageLoading(false);
+              handleImageError(e);
+            }}
+          />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
+            <Package className="w-12 h-12 text-gray-400" />
+          </div>
+        )}
+
+        {/* Loading state */}
+        {imageLoading && !imageError && (
+          <div className="absolute inset-0 bg-gray-200 animate-pulse flex items-center justify-center">
+            <div className="text-gray-400 text-sm">Loading...</div>
+          </div>
+        )}
+      </div>
+
+      {/* Gradient Overlay */}
+      <div className={`
+        absolute inset-0 bg-gradient-to-t transition-all duration-300
+        ${showHoverEffects 
+          ? 'from-black/70 via-black/30 to-transparent group-hover:from-black/80 group-hover:via-black/40'
+          : 'from-black/60 via-black/20 to-transparent'
+        }
+      `} />
+
+      {/* Alpha Store Branding */}
+      <div className="absolute top-3 left-3 z-10">
+        <div className="bg-gradient-to-r from-yellow-400 to-yellow-500 text-black px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+          <span>Î±</span>
+          <span>{locale === 'fa' ? 'کیفیت برتر' : 'Premium'}</span>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className={`
+        absolute inset-0 flex flex-col justify-end text-white z-10
+        ${config.padding}
+      `}>
+        {/* Category Info */}
+        <div className="space-y-2">
+          {/* Title */}
+          <h3 className={`
+            ${config.title} leading-tight
+            ${showHoverEffects ? 'group-hover:text-yellow-300 transition-colors duration-300' : ''}
+          `}>
+            {category.name[locale]}
+          </h3>
+
+          {/* Description (for larger sizes) */}
+          {size !== 'sm' && category.description && (
+            <p className={`
+              ${config.description} text-gray-200 opacity-90 line-clamp-2
+              ${showHoverEffects ? 'group-hover:opacity-100' : ''}
+            `}>
+              {category.description[locale]}
+            </p>
+          )}
+
+          {/* Product Count */}
+          {showProductCount && (
+            <div className={`
+              flex items-center gap-2 ${config.count} text-gray-300
+              ${showHoverEffects ? 'group-hover:text-white' : ''}
+            `}>
+              <Package className="w-4 h-4" />
+              <span>
+                {locale === 'fa' 
+                  ? `${toPersianDigits(category.productCount.toString())} محصول`
+                  : `${category.productCount} products`
+                }
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Hover Actions */}
+        {showHoverEffects && (
+          <div className={`
+            flex items-center justify-between mt-4 opacity-0 group-hover:opacity-100
+            transition-all duration-300 transform translate-y-4 group-hover:translate-y-0
+          `}>
+            <span className={`${config.count} text-yellow-300 font-medium`}>
+              {locale === 'fa' ? 'مشاهده محصولات' : 'View Products'}
+            </span>
+            <ArrowIcon className="w-5 h-5 text-yellow-300" />
+          </div>
+        )}
+      </div>
+
+      {/* Hover glow effect */}
+      {showHoverEffects && (
+        <div className="absolute -inset-0.5 bg-gradient-to-r from-yellow-400 to-emerald-400 rounded-xl opacity-0 group-hover:opacity-30 transition-opacity duration-300 -z-10" />
+      )}
+
+      {/* Loading shimmer effect */}
+      {imageLoading && (
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer" />
+      )}
+    </div>
+  );
+};
+
+// Grid layout for multiple category cards
+interface CategoryGridProps {
+  categories: Category[];
+  locale?: 'fa' | 'en';
+  size?: 'sm' | 'md' | 'lg';
+  columns?: number;
+  className?: string;
+  onCategoryClick?: (category: Category) => void;
+  showProductCount?: boolean;
+}
+
+const CategoryGrid: React.FC<CategoryGridProps> = ({
+  categories,
+  locale = 'fa',
+  size = 'md',
+  columns,
+  className = '',
+  onCategoryClick,
+  showProductCount = true
+}) => {
+  // Auto-determine columns based on screen size if not specified
+  const getGridClasses = () => {
+    if (columns) {
+      return `grid-cols-1 sm:grid-cols-2 lg:grid-cols-${Math.min(columns, 4)} xl:grid-cols-${columns}`;
+    }
+
+    // Default responsive grid
+    return 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
+  };
+
+  return (
+    <div className={`grid ${getGridClasses()} gap-6 ${className}`}>
+      {categories.map((category) => (
+        <CategoryCard
+          key={category.id}
+          category={category}
+          locale={locale}
+          size={size}
+          onClick={onCategoryClick}
+          showProductCount={showProductCount}
+        />
+      ))}
+    </div>
+  );
+};
+
+// Featured category hero component
+interface FeaturedCategoryProps {
+  category: Category;
+  locale?: 'fa' | 'en';
+  className?: string;
+  onClick?: (category: Category) => void;
+}
+
+const FeaturedCategory: React.FC<FeaturedCategoryProps> = ({
+  category,
+  locale = 'fa',
+  className = '',
+  onClick
+}) => {
+  const [imageLoading, setImageLoading] = useState(true);
+
+  const handleClick = () => {
+    if (onClick) {
+      onClick(category);
+    }
+  };
+
+  const ArrowIcon = locale === 'fa' ? ArrowLeft : ArrowRight;
+
+  return (
+    <div
+      className={`
+        group relative overflow-hidden rounded-2xl cursor-pointer
+        h-64 md:h-80 lg:h-96 transition-all duration-500 transform-gpu
+        hover:scale-[1.02] hover:shadow-2xl
+        ${className}
+      `}
+      onClick={handleClick}
+    >
+      {/* Background Image */}
+      <div className="absolute inset-0">
+        <img
+          src={category.image.url}
+          alt={category.image.alt}
+          className={`
+            w-full h-full object-cover transition-all duration-1000
+            group-hover:scale-110
+            ${imageLoading ? 'opacity-0' : 'opacity-100'}
+          `}
+          onLoad={() => setImageLoading(false)}
+          onError={handleImageError}
+        />
+
+        {imageLoading && (
+          <div className="absolute inset-0 bg-gray-200 animate-pulse" />
+        )}
+      </div>
+
+      {/* Gradient Overlay */}
+      <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent group-hover:from-black/90 group-hover:via-black/50 transition-all duration-300" />
+
+      {/* Content */}
+      <div className="absolute inset-0 flex items-center z-10 px-8 lg:px-12">
+        <div className="max-w-lg text-white space-y-4">
+          {/* Alpha Store Badge */}
+          <div className="inline-flex items-center gap-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black px-4 py-2 rounded-full text-sm font-bold">
+            <span className="text-lg">Î±</span>
+            <span>{locale === 'fa' ? 'مجموعه ویژه' : 'Featured Collection'}</span>
+          </div>
+
+          {/* Title */}
+          <h2 className="text-3xl lg:text-5xl font-bold leading-tight group-hover:text-yellow-300 transition-colors duration-300">
+            {category.name[locale]}
+          </h2>
+
+          {/* Description */}
+          <p className="text-lg text-gray-200 group-hover:text-white transition-colors duration-300">
+            {category.description[locale]}
+          </p>
+
+          {/* Stats */}
+          <div className="flex items-center gap-6 text-sm text-gray-300">
+            <div className="flex items-center gap-2">
+              <Package className="w-5 h-5" />
+              <span>
+                {locale === 'fa' 
+                  ? `${toPersianDigits(category.productCount.toString())} محصول`
+                  : `${category.productCount} Products`
+                }
+              </span>
+            </div>
+          </div>
+
+          {/* CTA Button */}
+          <button className="inline-flex items-center gap-3 bg-white text-black px-6 py-3 rounded-lg font-semibold hover:bg-yellow-300 transition-colors duration-300 transform hover:scale-105">
+            <span>
+              {locale === 'fa' ? 'مشاهده مجموعه' : 'Explore Collection'}
+            </span>
+            <ArrowIcon className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default CategoryCard;
+export { CategoryGrid, FeaturedCategory };

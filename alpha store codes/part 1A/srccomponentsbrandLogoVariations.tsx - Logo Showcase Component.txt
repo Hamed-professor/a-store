@@ -1,0 +1,368 @@
+/**
+ * Logo Variations Component
+ * Showcases all available logo variations and animations
+ */
+
+import React, { useState } from 'react';
+import { motion } from 'framer-motion';
+import { AlphaStoreLogo, AlphaStoreLogoPresets } from './AlphaStoreLogo';
+import type { AlphaLogoVariation, AlphaSize, AlphaTheme, AlphaLogoAnimation } from '@/utils/brand';
+
+export interface LogoVariationsProps {
+  /** Whether to show interactive controls */
+  interactive?: boolean;
+  /** Default theme for showcase */
+  defaultTheme?: AlphaTheme;
+  /** Custom class name */
+  className?: string;
+}
+
+const VARIATIONS: AlphaLogoVariation[] = ['icon', 'horizontal', 'stacked', 'minimal'];
+const SIZES: AlphaSize[] = ['sm', 'md', 'lg', 'xl'];
+const THEMES: AlphaTheme[] = ['light', 'dark', 'gold'];
+const ANIMATIONS: (AlphaLogoAnimation | undefined)[] = [undefined, 'glow', 'pulse', 'float', 'luxury', 'entrance'];
+
+const VARIATION_DESCRIPTIONS = {
+  icon: 'Just the Α symbol',
+  horizontal: 'Symbol + text horizontally',
+  stacked: 'Symbol over text vertically',
+  minimal: 'Minimal symbol only'
+};
+
+const ANIMATION_DESCRIPTIONS = {
+  undefined: 'No animation',
+  glow: 'Glowing effect',
+  pulse: 'Pulsing scale',
+  float: 'Floating motion',
+  luxury: 'Luxury shimmer',
+  entrance: 'Entrance animation'
+};
+
+/**
+ * Interactive Controls Component
+ */
+const LogoControls: React.FC<{
+  variation: AlphaLogoVariation;
+  size: AlphaSize;
+  theme: AlphaTheme;
+  animation: AlphaLogoAnimation | undefined;
+  showText: boolean;
+  onVariationChange: (variation: AlphaLogoVariation) => void;
+  onSizeChange: (size: AlphaSize) => void;
+  onThemeChange: (theme: AlphaTheme) => void;
+  onAnimationChange: (animation: AlphaLogoAnimation | undefined) => void;
+  onShowTextChange
+}) => {
+  return (
+    <div className="alpha-card p-6 mb-8">
+      <h3 className="text-lg font-bold text-alpha-gold mb-4">Logo Controls</h3>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Variation Control */}
+        <div>
+          <label className="block text-sm font-medium mb-2">Variation</label>
+          <select 
+            value={variation} 
+            onChange={(e) => onVariationChange(e.target.value as AlphaLogoVariation)}
+            className="alpha-input text-sm"
+          >
+            {VARIATIONS.map((v) => (
+              <option key={v} value={v}>
+                {v} - {VARIATION_DESCRIPTIONS[v]}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Size Control */}
+        <div>
+          <label className="block text-sm font-medium mb-2">Size</label>
+          <select 
+            value={size} 
+            onChange={(e) => onSizeChange(e.target.value as AlphaSize)}
+            className="alpha-input text-sm"
+          >
+            {SIZES.map((s) => (
+              <option key={s} value={s}>
+                {s.toUpperCase()}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Theme Control */}
+        <div>
+          <label className="block text-sm font-medium mb-2">Theme</label>
+          <select 
+            value={theme} 
+            onChange={(e) => onThemeChange(e.target.value as AlphaTheme)}
+            className="alpha-input text-sm"
+          >
+            {THEMES.map((t) => (
+              <option key={t} value={t}>
+                {t.charAt(0).toUpperCase() + t.slice(1)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Animation Control */}
+        <div>
+          <label className="block text-sm font-medium mb-2">Animation</label>
+          <select 
+            value={animation || ''} 
+            onChange={(e) => onAnimationChange(e.target.value as AlphaLogoAnimation || undefined)}
+            className="alpha-input text-sm"
+          >
+            {ANIMATIONS.map((a) => (
+              <option key={a || 'none'} value={a || ''}>
+                {ANIMATION_DESCRIPTIONS[a] || 'No animation'}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Show Text Control */}
+        <div>
+          <label className="block text-sm font-medium mb-2">Show Text</label>
+          <label className="flex items-center">
+            <input
+              type="checkbox"
+              checked={showText}
+              onChange={(e) => onShowTextChange(e.target.checked)}
+              className="mr-2"
+            />
+            <span>Include "Store" text</span>
+          </label>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Logo Preview Grid Component
+ */
+const LogoPreviewGrid: React.FC = () => {
+  return (
+    <div className="alpha-card p-6 mb-8">
+      <h3 className="text-lg font-bold text-alpha-gold mb-6">All Variations Preview</h3>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {VARIATIONS.map((variation) => (
+          <motion.div
+            key={variation}
+            className="p-6 border border-alpha-gold-200 rounded-lg bg-alpha-ivory-50"
+            whileHover={{ scale: 1.02 }}
+            transition={{ duration: 0.2 }}
+          >
+            <h4 className="text-md font-semibold mb-4 text-center text-alpha-black">
+              {variation.charAt(0).toUpperCase() + variation.slice(1)}
+            </h4>
+            <div className="flex justify-center items-center min-h-[100px] mb-4">
+              <AlphaStoreLogo
+                variation={variation}
+                size="lg"
+                theme="light"
+                showText={true}
+              />
+            </div>
+            <p className="text-sm text-alpha-black-600 text-center">
+              {VARIATION_DESCRIPTIONS[variation]}
+            </p>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Logo Presets Showcase Component
+ */
+const LogoPresetsShowcase: React.FC = () => {
+  const presets = [
+    { name: 'Hero', component: AlphaStoreLogoPresets.Hero, description: 'Large hero section logo' },
+    { name: 'Header', component: AlphaStoreLogoPresets.Header, description: 'Navigation header logo' },
+    { name: 'Footer', component: AlphaStoreLogoPresets.Footer, description: 'Footer section logo' },
+    { name: 'Loading', component: AlphaStoreLogoPresets.Loading, description: 'Loading state logo' },
+    { name: 'Minimal', component: AlphaStoreLogoPresets.Minimal, description: 'Minimal icon version' },
+    { name: 'Stacked', component: AlphaStoreLogoPresets.Stacked, description: 'Vertical stacked layout' },
+  ];
+
+  return (
+    <div className="alpha-card p-6 mb-8">
+      <h3 className="text-lg font-bold text-alpha-gold mb-6">Logo Presets</h3>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {presets.map(({ name, component: Component, description }) => (
+          <motion.div
+            key={name}
+            className="p-6 border border-alpha-emerald-200 rounded-lg bg-alpha-emerald-50"
+            whileHover={{ scale: 1.02 }}
+            transition={{ duration: 0.2 }}
+          >
+            <h4 className="text-md font-semibold mb-4 text-center text-alpha-black">
+              {name}
+            </h4>
+            <div className="flex justify-center items-center min-h-[120px] mb-4">
+              <Component />
+            </div>
+            <p className="text-sm text-alpha-black-600 text-center">
+              {description}
+            </p>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Animation Showcase Component
+ */
+const AnimationShowcase: React.FC = () => {
+  return (
+    <div className="alpha-card p-6">
+      <h3 className="text-lg font-bold text-alpha-gold mb-6">Animation Effects</h3>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {ANIMATIONS.filter(Boolean).map((animation) => (
+          <motion.div
+            key={animation}
+            className="p-6 border border-alpha-black-200 rounded-lg bg-alpha-black-50"
+            whileHover={{ scale: 1.02 }}
+            transition={{ duration: 0.2 }}
+          >
+            <h4 className="text-md font-semibold mb-4 text-center text-alpha-black">
+              {animation?.charAt(0).toUpperCase() + animation?.slice(1)}
+            </h4>
+            <div className="flex justify-center items-center min-h-[120px] mb-4">
+              <AlphaStoreLogo
+                variation="horizontal"
+                size="md"
+                theme="light"
+                animation={animation}
+                showText={true}
+              />
+            </div>
+            <p className="text-sm text-alpha-black-600 text-center">
+              {ANIMATION_DESCRIPTIONS[animation]}
+            </p>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Main LogoVariations Component
+ */
+export const LogoVariations: React.FC<LogoVariationsProps> = ({
+  interactive = false,
+  defaultTheme = 'light',
+  className = ''
+}) => {
+  const [variation, setVariation] = useState<AlphaLogoVariation>('horizontal');
+  const [size, setSize] = useState<AlphaSize>('lg');
+  const [theme, setTheme] = useState<AlphaTheme>(defaultTheme);
+  const [animation, setAnimation] = useState<AlphaLogoAnimation | undefined>('glow');
+  const [showText, setShowText] = useState(true);
+
+  return (
+    <div className={`space-y-8 ${className}`}>
+      {/* Interactive Controls */}
+      {interactive && (
+        <>
+          <LogoControls
+            variation={variation}
+            size={size}
+            theme={theme}
+            animation={animation}
+            showText={showText}
+            onVariationChange={setVariation}
+            onSizeChange={setSize}
+            onThemeChange={setTheme}
+            onAnimationChange={setAnimation}
+            onShowTextChange={setShowText}
+          />
+
+          {/* Live Preview */}
+          <div className="alpha-card p-8">
+            <h3 className="text-lg font-bold text-alpha-gold mb-6 text-center">Live Preview</h3>
+            <div className="flex justify-center items-center min-h-[200px] bg-gradient-to-br from-alpha-ivory to-alpha-gold-50 rounded-lg">
+              <AlphaStoreLogo
+                variation={variation}
+                size={size}
+                theme={theme}
+                animation={animation}
+                showText={showText}
+              />
+            </div>
+            <div className="mt-4 text-center">
+              <code className="text-sm bg-alpha-black-100 px-3 py-1 rounded">
+                {`<AlphaStoreLogo variation="${variation}" size="${size}" theme="${theme}"${animation ? ` animation="${animation}"` : ''} showText={${showText}} />`}
+              </code>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Static Showcases */}
+      <LogoPreviewGrid />
+      <LogoPresetsShowcase />
+      <AnimationShowcase />
+
+      {/* Usage Examples */}
+      <div className="alpha-card p-6">
+        <h3 className="text-lg font-bold text-alpha-gold mb-6">Usage Examples</h3>
+        
+        <div className="space-y-6">
+          <div>
+            <h4 className="font-semibold mb-2">Import</h4>
+            <code className="block bg-alpha-black-100 p-3 rounded text-sm">
+              {`import { AlphaStoreLogo, AlphaStoreLogoPresets } from '@/components/brand/AlphaStoreLogo';`}
+            </code>
+          </div>
+
+          <div>
+            <h4 className="font-semibold mb-2">Basic Usage</h4>
+            <code className="block bg-alpha-black-100 p-3 rounded text-sm">
+              {`<AlphaStoreLogo variation="horizontal" size="md" theme="light" />`}
+            </code>
+          </div>
+
+          <div>
+            <h4 className="font-semibold mb-2">With Animation</h4>
+            <code className="block bg-alpha-black-100 p-3 rounded text-sm">
+              {`<AlphaStoreLogo animation="luxury" clickable onClick={() => router.push('/')} />`}
+            </code>
+          </div>
+
+          <div>
+            <h4 className="font-semibold mb-2">Using Presets</h4>
+            <code className="block bg-alpha-black-100 p-3 rounded text-sm">
+              {`<AlphaStoreLogoPresets.Hero />
+<AlphaStoreLogoPresets.Header href="/" />
+<AlphaStoreLogoPresets.Loading loading={isLoading} />`}
+            </code>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default LogoVariations;: (showText: boolean) => void;
+}> = ({
+  variation,
+  size,
+  theme,
+  animation,
+  showText,
+  onVariationChange,
+  onSizeChange,
+  onThemeChange,
+  onAnimationChange,
+  onShowTextChange

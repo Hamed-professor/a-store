@@ -1,0 +1,328 @@
+/**
+ * Α Store Homepage
+ * Showcases the brand system and logo variations
+ */
+
+import React from 'react';
+import { NextPage } from 'next';
+import Head from 'next/head';
+import { motion } from 'framer-motion';
+import { AlphaStoreLogo, AlphaStoreLogoPresets } from '@/components/brand/AlphaStoreLogo';
+import { LogoVariations } from '@/components/brand/LogoVariations';
+import { useBrand, useTheme, useDirection } from '@/components/brand/BrandProvider';
+import { ALPHA_BRAND_CONFIG } from '@/utils/brand';
+
+const HomePage: NextPage = () => {
+  const { brandConfig } = useBrand();
+  const { theme, setTheme, toggleTheme, isDark, isLight } = useTheme();
+  const { direction, toggleDirection, isRTL } = useDirection();
+
+  return (
+    <>
+      <Head>
+        <title>صفحه اصلی - {brandConfig.siteName}</title>
+        <meta name="description" content={`${brandConfig.description} - صفحه اصلی`} />
+      </Head>
+
+      <div className="min-h-screen bg-gradient-to-br from-alpha-ivory via-alpha-ivory-100 to-alpha-gold-50">
+        {/* Navigation Header */}
+        <header className="alpha-glass border-b border-alpha-gold-200 sticky top-0 z-40">
+          <div className="alpha-container">
+            <nav className="flex items-center justify-between py-4">
+              {/* Logo */}
+              <AlphaStoreLogoPresets.Header 
+                href="/"
+                className="alpha-hover-scale"
+              />
+              
+              {/* Navigation Links */}
+              <div className="hidden md:flex items-center space-x-8 space-x-reverse">
+                <a href="#showcase" className="alpha-nav-link">نمایش لوگو</a>
+                <a href="#variations" className="alpha-nav-link">انواع لوگو</a>
+                <a href="#presets" className="alpha-nav-link">قالب‌های آماده</a>
+                <a href="#animations" className="alpha-nav-link">انیمیشن‌ها</a>
+              </div>
+              
+              {/* Theme & Direction Controls */}
+              <div className="flex items-center space-x-4 space-x-reverse">
+                <button
+                  onClick={toggleTheme}
+                  className="alpha-btn alpha-btn--ghost alpha-btn--sm"
+                  title="تغییر تم"
+                >
+                  {isDark ? '🌙' : isLight ? '☀️' : '✨'}
+                </button>
+                
+                <button
+                  onClick={toggleDirection}
+                  className="alpha-btn alpha-btn--ghost alpha-btn--sm"
+                  title="تغییر جهت"
+                >
+                  {isRTL ? 'LTR' : 'RTL'}
+                </button>
+              </div>
+            </nav>
+          </div>
+        </header>
+
+        {/* Hero Section */}
+        <section className="relative overflow-hidden py-20 lg:py-32">
+          <div className="alpha-container text-center">
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8 }}
+            >
+              {/* Main Hero Logo */}
+              <div className="mb-8">
+                <AlphaStoreLogoPresets.Hero />
+              </div>
+              
+              {/* Hero Title */}
+              <motion.h1
+                className="text-4xl lg:text-6xl font-bold mb-6 alpha-gradient-text"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.2 }}
+              >
+                سیستم برند لوکس فارسی
+              </motion.h1>
+              
+              {/* Hero Subtitle */}
+              <motion.p
+                className="text-xl lg:text-2xl text-alpha-black-600 mb-8 max-w-3xl mx-auto leading-relaxed"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.4 }}
+              >
+                پلتفرم تجارت الکترونیک مدرن با طراحی لوکس، پشتیبانی کامل از راست‌به‌چپ و انیمیشن‌های خیره‌کننده
+              </motion.p>
+              
+              {/* Hero Actions */}
+              <motion.div
+                className="flex flex-col sm:flex-row items-center justify-center gap-4"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.6 }}
+              >
+                <a href="#showcase" className="alpha-btn alpha-btn--primary alpha-btn--lg alpha-hover-lift">
+                  مشاهده نمونه‌ها
+                </a>
+                <a href="#variations" className="alpha-btn alpha-btn--outline alpha-btn--lg alpha-hover-lift">
+                  کاوش در انواع لوگو
+                </a>
+              </motion.div>
+            </motion.div>
+          </div>
+          
+          {/* Background Decoration */}
+          <div className="absolute inset-0 -z-10">
+            <div className="absolute top-1/4 right-1/4 w-64 h-64 bg-alpha-gold opacity-10 rounded-full blur-3xl animate-alpha-float"></div>
+            <div className="absolute bottom-1/4 left-1/4 w-96 h-96 bg-alpha-emerald opacity-10 rounded-full blur-3xl animate-alpha-float" style={{ animationDelay: '1s' }}></div>
+          </div>
+        </section>
+
+        {/* Quick Logo Showcase */}
+        <section id="showcase" className="py-16 lg:py-24 bg-alpha-ivory">
+          <div className="alpha-container">
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              viewport={{ once: true }}
+              className="text-center mb-16"
+            >
+              <h2 className="text-3xl lg:text-4xl font-bold mb-6 text-alpha-gold">
+                نمایش سریع لوگوها
+              </h2>
+              <p className="text-lg text-alpha-black-600 max-w-2xl mx-auto">
+                نمایش انواع مختلف لوگو و انیمیشن‌های آن در اندازه‌ها و تم‌های متفاوت
+              </p>
+            </motion.div>
+
+            {/* Logo Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {/* Hero Preset */}
+              <motion.div
+                className="alpha-card alpha-card--luxury p-8 text-center alpha-hover-lift"
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.1 }}
+                viewport={{ once: true }}
+              >
+                <h3 className="text-lg font-semibold mb-6 text-alpha-gold">لوگو صفحه اصلی</h3>
+                <div className="flex justify-center items-center min-h-[120px]">
+                  <AlphaStoreLogoPresets.Hero size="lg" />
+                </div>
+              </motion.div>
+
+              {/* Header Preset */}
+              <motion.div
+                className="alpha-card alpha-card--luxury p-8 text-center alpha-hover-lift"
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.2 }}
+                viewport={{ once: true }}
+              >
+                <h3 className="text-lg font-semibold mb-6 text-alpha-gold">لوگو منو</h3>
+                <div className="flex justify-center items-center min-h-[120px]">
+                  <AlphaStoreLogoPresets.Header />
+                </div>
+              </motion.div>
+
+              {/* Stacked Preset */}
+              <motion.div
+                className="alpha-card alpha-card--luxury p-8 text-center alpha-hover-lift"
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.3 }}
+                viewport={{ once: true }}
+              >
+                <h3 className="text-lg font-semibold mb-6 text-alpha-gold">لوگو عمودی</h3>
+                <div className="flex justify-center items-center min-h-[120px]">
+                  <AlphaStoreLogoPresets.Stacked />
+                </div>
+              </motion.div>
+
+              {/* Animated Versions */}
+              <motion.div
+                className="alpha-card alpha-card--luxury p-8 text-center alpha-hover-lift"
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.4 }}
+                viewport={{ once: true }}
+              >
+                <h3 className="text-lg font-semibold mb-6 text-alpha-gold">انیمیشن درخشش</h3>
+                <div className="flex justify-center items-center min-h-[120px]">
+                  <AlphaStoreLogo 
+                    variation="horizontal" 
+                    size="md" 
+                    animation="glow" 
+                  />
+                </div>
+              </motion.div>
+
+              <motion.div
+                className="alpha-card alpha-card--luxury p-8 text-center alpha-hover-lift"
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.5 }}
+                viewport={{ once: true }}
+              >
+                <h3 className="text-lg font-semibold mb-6 text-alpha-gold">انیمیشن شناور</h3>
+                <div className="flex justify-center items-center min-h-[120px]">
+                  <AlphaStoreLogo 
+                    variation="horizontal" 
+                    size="md" 
+                    animation="float" 
+                  />
+                </div>
+              </motion.div>
+
+              <motion.div
+                className="alpha-card alpha-card--luxury p-8 text-center alpha-hover-lift"
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.6 }}
+                viewport={{ once: true }}
+              >
+                <h3 className="text-lg font-semibold mb-6 text-alpha-gold">انیمیشن لوکس</h3>
+                <div className="flex justify-center items-center min-h-[120px]">
+                  <AlphaStoreLogo 
+                    variation="horizontal" 
+                    size="md" 
+                    animation="luxury" 
+                  />
+                </div>
+              </motion.div>
+            </div>
+          </div>
+        </section>
+
+        {/* Features Section */}
+        <section className="py-16 lg:py-24 bg-gradient-to-r from-alpha-gold-50 to-alpha-emerald-50">
+          <div className="alpha-container">
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              viewport={{ once: true }}
+              className="text-center mb-16"
+            >
+              <h2 className="text-3xl lg:text-4xl font-bold mb-6 text-alpha-black">
+                ویژگی‌های سیستم برند
+              </h2>
+              <p className="text-lg text-alpha-black-600 max-w-2xl mx-auto">
+                سیستم برند جامع با پشتیبانی کامل از زبان فارسی و انیمیشن‌های مدرن
+              </p>
+            </motion.div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+              {[
+                { icon: '🎨', title: 'طراحی لوکس', desc: 'رنگ‌بندی طلایی و سبز زمردی با طراحی مدرن' },
+                { icon: '🔄', title: 'پشتیبانی RTL', desc: 'پشتیبانی کامل از راست‌به‌چپ و فونت‌های فارسی' },
+                { icon: '✨', title: 'انیمیشن‌های زنده', desc: 'انیمیشن‌های روان و جذاب با Framer Motion' },
+                { icon: '📱', title: 'طراحی واکنش‌گرا', desc: 'سازگار با تمام اندازه‌های صفحه نمایش' }
+              ].map((feature, index) => (
+                <motion.div
+                  key={feature.title}
+                  className="alpha-card p-6 text-center alpha-hover-lift"
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: index * 0.1 }}
+                  viewport={{ once: true }}
+                >
+                  <div className="text-4xl mb-4">{feature.icon}</div>
+                  <h3 className="text-lg font-semibold mb-3 text-alpha-gold">{feature.title}</h3>
+                  <p className="text-alpha-black-600">{feature.desc}</p>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Full Logo Variations */}
+        <section id="variations" className="py-16 lg:py-24 bg-alpha-ivory">
+          <div className="alpha-container">
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              viewport={{ once: true }}
+              className="text-center mb-16"
+            >
+              <h2 className="text-3xl lg:text-4xl font-bold mb-6 text-alpha-gold">
+                مجموعه کامل لوگوها
+              </h2>
+              <p className="text-lg text-alpha-black-600 max-w-2xl mx-auto">
+                تست و بررسی تمام انواع لوگو با کنترل‌های تعاملی
+              </p>
+            </motion.div>
+
+            <LogoVariations interactive={true} />
+          </div>
+        </section>
+
+        {/* Footer */}
+        <footer className="bg-alpha-black text-alpha-ivory py-12">
+          <div className="alpha-container">
+            <div className="text-center">
+              <AlphaStoreLogoPresets.Footer className="mb-6" />
+              <p className="text-alpha-ivory-600 mb-4">
+                {brandConfig.description}
+              </p>
+              <p className="text-alpha-ivory-700 text-sm">
+                © 2024 {brandConfig.siteName}. تمامی حقوق محفوظ است.
+              </p>
+              <p className="text-alpha-ivory-700 text-sm mt-2">
+                نسخه {brandConfig.version} - {brandConfig.primaryDomain}
+              </p>
+            </div>
+          </div>
+        </footer>
+      </div>
+    </>
+  );
+};
+
+export default HomePage;

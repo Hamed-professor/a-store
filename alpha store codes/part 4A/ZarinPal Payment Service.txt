@@ -1,0 +1,338 @@
+// src/services/payments/zarinpal.ts
+import axios, { AxiosError } from 'axios';
+import {
+  PaymentRequest,
+  PaymentResponse,
+  PaymentVerification,
+  ZarinPalRequest,
+  ZarinPalResponse,
+  ZarinPalVerifyRequest,
+  ZarinPalVerifyResponse,
+  PaymentError,
+  PAYMENT_ERROR_CODES
+} from '../../types/payment';
+
+class ZarinPalService {
+  private readonly merchantId: string;
+  private readonly baseUrl: string;
+  private readonly sandboxUrl = 'https://sandbox.zarinpal.com/pg/v4/payment';
+  private readonly productionUrl = 'https://api.zarinpal.com/pg/v4/payment';
+  private readonly gatewayUrl = 'https://www.zarinpal.com/pg/StartPay';
+  private readonly sandboxGatewayUrl = 'https://sandbox.zarinpal.com/pg/StartPay';
+  private readonly isSandbox: boolean;
+
+  constructor() {
+    this.merchantId = process.env.ZARINPAL_MERCHANT_ID || '';
+    this.isSandbox = process.env.NODE_ENV !== 'production';
+    this.baseUrl = this.isSandbox ? this.sandboxUrl : this.productionUrl;
+
+    if (!this.merchantId) {
+      throw new Error('ZarinPal merchant ID is required');
+    }
+  }
+
+  async requestPayment(paymentData: PaymentRequest): Promise<PaymentResponse> {
+    try {
+      const requestData: ZarinPalRequest = {
+        merchant_id: this.merchantId,
+        amount: this.convertToRials(paymentData.amount, paymentData.currency),
+        currency: 'IRR',
+        description: paymentData.descriptionPersian,
+        callback_url: paymentData.callbackUrl,
+        metadata: {
+          order_id: paymentData.orderId,
+          mobile: paymentData.metadata?.mobile,
+          email: paymentData.metadata?.email
+        }
+      };
+
+      const response = await axios.post<ZarinPalResponse>(
+        `${this.baseUrl}/request.json`,
+        requestData,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          timeout: 30000
+        }
+      );
+
+      if (response.data.data && response.data.data.code === 100) {
+        const gatewayUrl = this.isSandbox ? this.sandboxGatewayUrl : this.gatewayUrl;
+        
+        return {
+          success: true,
+          gatewayId: 'zarinpal',
+          authority: response.data.data.authority,
+          paymentUrl: `${gatewayUrl}/${response.data.data.authority}`,
+          message: 'Payment request successful',
+          messagePersian: 'درخواست پرداخت با موفقیت ارسال شد'
+        };
+      }
+
+      // Handle ZarinPal errors
+      const error = response.data.errors || response.data.data;
+      return this.handleError(error?.code, error?.message);
+
+    } catch (error) {
+      console.error('ZarinPal request error:', error);
+      return this.handleAxiosError(error as AxiosError);
+    }
+  }
+
+  async verifyPayment(
+    authority: string, 
+    amount: number, 
+    currency: 'IRR' | 'IRT'
+  ): Promise<PaymentVerification | null> {
+    try {
+      const requestData: ZarinPalVerifyRequest = {
+        merchant_id: this.merchantId,
+        amount: this.convertToRials(amount, currency),
+        authority
+      };
+
+      const response = await axios.post<ZarinPalVerifyResponse>(
+        `${this.baseUrl}/verify.json`,
+        requestData,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          timeout: 30000
+        }
+      );
+
+      if (response.data.data && response.data.data.code === 100) {
+        return {
+          success: true,
+          transactionId: authority,
+          orderId: '', // Will be filled from metadata
+          amount: this.convertFromRials(response.data.data.fee_type === 'Merchant' ? amount : amount - response.data.data.fee, currency),
+          currency,
+          gatewayId: 'zarinpal',
+          authority,
+          refId: response.data.data.ref_id.toString(),
+          cardPan: response.data.data.card_pan,
+          message: 'Payment verified successfully',
+          messagePersian: 'پرداخت با موفقیت تایید شد',
+          verifiedAt: new Date()
+        };
+      }
+
+      return null;
+    } catch (error) {
+      console.error('ZarinPal verify error:', error);
+      return null;
+    }
+  }
+
+  async checkPaymentStatus(authority: string): Promise<PaymentResponse> {
+    try {
+      const response = await axios.get(
+        `${this.baseUrl}/unverified.json`,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          params: {
+            merchant_id: this.merchantId,
+            authority
+          },
+          timeout: 15000
+        }
+      );
+
+      if (response.data.data && response.data.data.code === 100) {
+        return {
+          success: true,
+          gatewayId: 'zarinpal',
+          authority,
+          message: 'Payment found',
+          messagePersian: 'پرداخت یافت شد'
+        };
+      }
+
+      return {
+        success: false,
+        gatewayId: 'zarinpal',
+        message: 'Payment not found',
+        messagePersian: 'پرداخت یافت نشد'
+      };
+    } catch (error) {
+      console.error('ZarinPal status check error:', error);
+      return {
+        success: false,
+        gatewayId: 'zarinpal',
+        message: 'Status check failed',
+        messagePersian: 'بررسی وضعیت ناموفق'
+      };
+    }
+  }
+
+  private convertToRials(amount: number, currency: 'IRR' | 'IRT'): number {
+    return currency === 'IRT' ? amount * 10 : amount;
+  }
+
+  private convertFromRials(amount: number, currency: 'IRR' | 'IRT'): number {
+    return currency === 'IRT' ? amount / 10 : amount;
+  }
+
+  private handleError(code?: number, message?: string): PaymentResponse {
+    const errorMap: Record<number, { en: string; fa: string; errorCode: string }> = {
+      -1: {
+        en: 'Information sent is incomplete',
+        fa: 'اطلاعات ارسال شده ناقص است',
+        errorCode: PAYMENT_ERROR_CODES.INVALID_AMOUNT
+      },
+      -2: {
+        en: 'Merchant ID or IP is incorrect',
+        fa: 'کد پذیرنده یا آی‌پی اشتباه است',
+        errorCode: PAYMENT_ERROR_CODES.INVALID_MERCHANT
+      },
+      -3: {
+        en: 'Amount should be above 100 Tomans',
+        fa: 'مبلغ باید بیش از ۱۰۰ تومان باشد',
+        errorCode: PAYMENT_ERROR_CODES.INVALID_AMOUNT
+      },
+      -4: {
+        en: 'Merchant account level is lower than required',
+        fa: 'سطح تایید پذیرنده کمتر از حد مورد نیاز است',
+        errorCode: PAYMENT_ERROR_CODES.INVALID_MERCHANT
+      },
+      -11: {
+        en: 'Request not found',
+        fa: 'درخواست مورد نظر یافت نشد',
+        errorCode: PAYMENT_ERROR_CODES.GATEWAY_ERROR
+      },
+      -12: {
+        en: 'Cannot edit request',
+        fa: 'امکان ویرایش درخواست وجود ندارد',
+        errorCode: PAYMENT_ERROR_CODES.GATEWAY_ERROR
+      },
+      -21: {
+        en: 'No financial operation found',
+        fa: 'هیچ نوع عملیات مالی برای این تراکنش یافت نشد',
+        errorCode: PAYMENT_ERROR_CODES.VERIFICATION_FAILED
+      },
+      -22: {
+        en: 'Transaction failed',
+        fa: 'تراکنش ناموفق بوده است',
+        errorCode: PAYMENT_ERROR_CODES.VERIFICATION_FAILED
+      },
+      -33: {
+        en: 'Transaction amount does not match verification amount',
+        fa: 'مبلغ تراکنش با مبلغ پرداخت شده مطابقت ندارد',
+        errorCode: PAYMENT_ERROR_CODES.VERIFICATION_FAILED
+      },
+      -34: {
+        en: 'Transaction split ceiling exceeded',
+        fa: 'سقف تقسیم تراکنش از لحاظ تعداد یا مبلغ اشتباه است',
+        errorCode: PAYMENT_ERROR_CODES.GATEWAY_ERROR
+      },
+      -40: {
+        en: 'Access to method not allowed',
+        fa: 'اجازه دسترسی به متد مربوطه وجود ندارد',
+        errorCode: PAYMENT_ERROR_CODES.INVALID_MERCHANT
+      },
+      -41: {
+        en: 'Additional data related to information sent is invalid',
+        fa: 'اطلاعات ارسال شده مربوط به AdditionalData غیرمعتبر است',
+        errorCode: PAYMENT_ERROR_CODES.GATEWAY_ERROR
+      },
+      -50: {
+        en: 'Request amount exceeds acceptable limit',
+        fa: 'مبلغ پرداخت از حد مجاز تعریف شده بیشتر است',
+        errorCode: PAYMENT_ERROR_CODES.INVALID_AMOUNT
+      },
+      -51: {
+        en: 'Request amount is less than acceptable limit',
+        fa: 'مبلغ پرداخت کمتر از حد مجاز تعریف شده است',
+        errorCode: PAYMENT_ERROR_CODES.INVALID_AMOUNT
+      },
+      -52: {
+        en: 'Credential issue',
+        fa: 'خطا در تنظیمات شاپ',
+        errorCode: PAYMENT_ERROR_CODES.INVALID_MERCHANT
+      },
+      -53: {
+        en: 'Transaction exceeds daily limit',
+        fa: 'پرداخت از حد مجاز روزانه بیشتر است',
+        errorCode: PAYMENT_ERROR_CODES.GATEWAY_ERROR
+      },
+      -54: {
+        en: 'Invalid request amount',
+        fa: 'مبلغ درخواستی نامعتبر است',
+        errorCode: PAYMENT_ERROR_CODES.INVALID_AMOUNT
+      },
+      101: {
+        en: 'Transaction previously verified',
+        fa: 'تراکنش قبلاً تایید شده است',
+        errorCode: PAYMENT_ERROR_CODES.VERIFICATION_FAILED
+      }
+    };
+
+    const error = code && errorMap[code] ? errorMap[code] : {
+      en: message || 'Unknown error',
+      fa: 'خطای نامشخص',
+      errorCode: PAYMENT_ERROR_CODES.UNKNOWN_ERROR
+    };
+
+    return {
+      success: false,
+      gatewayId: 'zarinpal',
+      message: error.en,
+      messagePersian: error.fa,
+      errorCode: error.errorCode
+    };
+  }
+
+  private handleAxiosError(error: AxiosError): PaymentResponse {
+    if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+      return {
+        success: false,
+        gatewayId: 'zarinpal',
+        message: 'Request timeout',
+        messagePersian: 'زمان درخواست به پایان رسید',
+        errorCode: PAYMENT_ERROR_CODES.NETWORK_ERROR
+      };
+    }
+
+    if (!error.response) {
+      return {
+        success: false,
+        gatewayId: 'zarinpal',
+        message: 'Network error',
+        messagePersian: 'خطای شبکه',
+        errorCode: PAYMENT_ERROR_CODES.NETWORK_ERROR
+      };
+    }
+
+    return {
+      success: false,
+      gatewayId: 'zarinpal',
+      message: 'Gateway error',
+      messagePersian: 'خطای درگاه پرداخت',
+      errorCode: PAYMENT_ERROR_CODES.GATEWAY_ERROR
+    };
+  }
+
+  getGatewayInfo() {
+    return {
+      id: 'zarinpal',
+      name: 'ZarinPal',
+      namePersian: 'زرین‌پال',
+      logo: '/images/gateways/zarinpal.png',
+      isAvailable: true,
+      processingFee: 0,
+      supportedCurrencies: ['IRR', 'IRT'],
+      description: 'Secure payment with ZarinPal',
+      descriptionPersian: 'پرداخت امن با زرین‌پال'
+    };
+  }
+}
+
+export default new ZarinPalService();

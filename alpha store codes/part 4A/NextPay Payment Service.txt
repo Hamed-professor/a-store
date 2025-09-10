@@ -1,0 +1,310 @@
+// src/services/payments/nextpay.ts
+import axios, { AxiosError } from 'axios';
+import {
+  PaymentRequest,
+  PaymentResponse,
+  PaymentVerification,
+  NextPayRequest,
+  NextPayResponse,
+  NextPayVerifyRequest,
+  NextPayVerifyResponse,
+  PAYMENT_ERROR_CODES
+} from '../../types/payment';
+
+class NextPayService {
+  private readonly apiKey: string;
+  private readonly baseUrl = 'https://nextpay.org/nx/gateway';
+
+  constructor() {
+    this.apiKey = process.env.NEXTPAY_API_KEY || '';
+    
+    if (!this.apiKey) {
+      throw new Error('NextPay API key is required');
+    }
+  }
+
+  async requestPayment(paymentData: PaymentRequest): Promise<PaymentResponse> {
+    try {
+      const requestData: NextPayRequest = {
+        api_key: this.apiKey,
+        amount: this.convertToRials(paymentData.amount, paymentData.currency),
+        order_id: paymentData.orderId,
+        callback_uri: paymentData.callbackUrl,
+        customer_phone: paymentData.metadata?.mobile,
+        custom_json_fields: {
+          description: paymentData.descriptionPersian,
+          email: paymentData.metadata?.email
+        }
+      };
+
+      const response = await axios.post<NextPayResponse>(
+        `${this.baseUrl}/token.http`,
+        requestData,
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          timeout: 30000
+        }
+      );
+
+      if (response.data.code === 0 && response.data.trans_id) {
+        return {
+          success: true,
+          gatewayId: 'nextpay',
+          transactionId: response.data.trans_id,
+          paymentUrl: `${this.baseUrl}/payment/${response.data.trans_id}`,
+          message: 'Payment request successful',
+          messagePersian: 'درخواست پرداخت با موفقیت ارسال شد'
+        };
+      }
+
+      return this.handleError(response.data.code, response.data.error_desc);
+
+    } catch (error) {
+      console.error('NextPay request error:', error);
+      return this.handleAxiosError(error as AxiosError);
+    }
+  }
+
+  async verifyPayment(
+    transId: string,
+    expectedAmount: number,
+    currency: 'IRR' | 'IRT'
+  ): Promise<PaymentVerification | null> {
+    try {
+      const requestData: NextPayVerifyRequest = {
+        api_key: this.apiKey,
+        amount: this.convertToRials(expectedAmount, currency),
+        trans_id: transId
+      };
+
+      const response = await axios.post<NextPayVerifyResponse>(
+        `${this.baseUrl}/verify.http`,
+        requestData,
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          timeout: 30000
+        }
+      );
+
+      if (response.data.code === 0) {
+        const receivedAmount = this.convertFromRials(response.data.amount || 0, currency);
+        
+        // Verify amount matches
+        if (Math.abs(receivedAmount - expectedAmount) > 1) {
+          console.error('Amount mismatch:', { expected: expectedAmount, received: receivedAmount });
+          return null;
+        }
+
+        return {
+          success: true,
+          transactionId: transId,
+          orderId: response.data.order_id || '',
+          amount: receivedAmount,
+          currency,
+          gatewayId: 'nextpay',
+          authority: transId,
+          refId: response.data.Shaparak_Ref_Id,
+          cardPan: response.data.card_holder,
+          message: 'Payment verified successfully',
+          messagePersian: 'پرداخت با موفقیت تایید شد',
+          verifiedAt: new Date()
+        };
+      }
+
+      return null;
+    } catch (error) {
+      console.error('NextPay verify error:', error);
+      return null;
+    }
+  }
+
+  async checkPaymentStatus(transId: string): Promise<PaymentResponse> {
+    try {
+      // NextPay doesn't have a separate status endpoint
+      // We can use verify with amount 0 for status check
+      const verification = await this.verifyPayment(transId, 0, 'IRR');
+      
+      if (verification) {
+        return {
+          success: true,
+          gatewayId: 'nextpay',
+          transactionId: transId,
+          message: 'Payment found',
+          messagePersian: 'پرداخت یافت شد'
+        };
+      }
+
+      return {
+        success: false,
+        gatewayId: 'nextpay',
+        message: 'Payment not found',
+        messagePersian: 'پرداخت یافت نشد'
+      };
+    } catch (error) {
+      console.error('NextPay status check error:', error);
+      return {
+        success: false,
+        gatewayId: 'nextpay',
+        message: 'Status check failed',
+        messagePersian: 'بررسی وضعیت ناموفق'
+      };
+    }
+  }
+
+  private convertToRials(amount: number, currency: 'IRR' | 'IRT'): number {
+    return currency === 'IRT' ? amount * 10 : amount;
+  }
+
+  private convertFromRials(amount: number, currency: 'IRR' | 'IRT'): number {
+    return currency === 'IRT' ? amount / 10 : amount;
+  }
+
+  private handleError(code?: number, errorDesc?: string): PaymentResponse {
+    const errorMap: Record<number, { en: string; fa: string; errorCode: string }> = {
+      -1: {
+        en: 'API key is not sent',
+        fa: 'کلید API ارسال نشده است',
+        errorCode: PAYMENT_ERROR_CODES.INVALID_MERCHANT
+      },
+      -2: {
+        en: 'Amount is not sent',
+        fa: 'مبلغ ارسال نشده است',
+        errorCode: PAYMENT_ERROR_CODES.INVALID_AMOUNT
+      },
+      -3: {
+        en: 'Amount is less than 1000 Rials',
+        fa: 'مبلغ کمتر از ۱۰۰۰ ریال است',
+        errorCode: PAYMENT_ERROR_CODES.INVALID_AMOUNT
+      },
+      -4: {
+        en: 'Amount is more than 50,000,000 Tomans',
+        fa: 'مبلغ بیشتر از ۵۰,۰۰۰,۰۰۰ تومان است',
+        errorCode: PAYMENT_ERROR_CODES.INVALID_AMOUNT
+      },
+      -5: {
+        en: 'Order ID is not sent',
+        fa: 'شماره سفارش ارسال نشده است',
+        errorCode: PAYMENT_ERROR_CODES.GATEWAY_ERROR
+      },
+      -6: {
+        en: 'Callback URL is not sent',
+        fa: 'آدرس بازگشت ارسال نشده است',
+        errorCode: PAYMENT_ERROR_CODES.GATEWAY_ERROR
+      },
+      -7: {
+        en: 'API key is invalid',
+        fa: 'کلید API نامعتبر است',
+        errorCode: PAYMENT_ERROR_CODES.INVALID_MERCHANT
+      },
+      -8: {
+        en: 'Order ID must be unique',
+        fa: 'شماره سفارش باید یکتا باشد',
+        errorCode: PAYMENT_ERROR_CODES.GATEWAY_ERROR
+      },
+      -9: {
+        en: 'Your account is not active',
+        fa: 'حساب شما فعال نیست',
+        errorCode: PAYMENT_ERROR_CODES.INVALID_MERCHANT
+      },
+      -10: {
+        en: 'Your IP is not allowed',
+        fa: 'آی‌پی شما مجاز نیست',
+        errorCode: PAYMENT_ERROR_CODES.INVALID_MERCHANT
+      },
+      -11: {
+        en: 'Callback URL domain is not allowed',
+        fa: 'دامنه آدرس بازگشت مجاز نیست',
+        errorCode: PAYMENT_ERROR_CODES.GATEWAY_ERROR
+      },
+      -12: {
+        en: 'Amount format is invalid',
+        fa: 'فرمت مبلغ اشتباه است',
+        errorCode: PAYMENT_ERROR_CODES.INVALID_AMOUNT
+      },
+      -15: {
+        en: 'Transaction not found',
+        fa: 'تراکنش یافت نشد',
+        errorCode: PAYMENT_ERROR_CODES.VERIFICATION_FAILED
+      },
+      -16: {
+        en: 'Amount does not match',
+        fa: 'مبلغ مطابقت ندارد',
+        errorCode: PAYMENT_ERROR_CODES.VERIFICATION_FAILED
+      },
+      -17: {
+        en: 'Transaction already verified',
+        fa: 'تراکنش قبلاً تایید شده است',
+        errorCode: PAYMENT_ERROR_CODES.VERIFICATION_FAILED
+      },
+      -18: {
+        en: 'Transaction is invalid',
+        fa: 'تراکنش نامعتبر است',
+        errorCode: PAYMENT_ERROR_CODES.VERIFICATION_FAILED
+      }
+    };
+
+    const error = code !== undefined && errorMap[code] ? errorMap[code] : {
+      en: errorDesc || 'Unknown error',
+      fa: 'خطای نامشخص',
+      errorCode: PAYMENT_ERROR_CODES.UNKNOWN_ERROR
+    };
+
+    return {
+      success: false,
+      gatewayId: 'nextpay',
+      message: error.en,
+      messagePersian: error.fa,
+      errorCode: error.errorCode
+    };
+  }
+
+  private handleAxiosError(error: AxiosError): PaymentResponse {
+    if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+      return {
+        success: false,
+        gatewayId: 'nextpay',
+        message: 'Request timeout',
+        messagePersian: 'زمان درخواست به پایان رسید',
+        errorCode: PAYMENT_ERROR_CODES.NETWORK_ERROR
+      };
+    }
+
+    if (!error.response) {
+      return {
+        success: false,
+        gatewayId: 'nextpay',
+        message: 'Network error',
+        messagePersian: 'خطای شبکه',
+        errorCode: PAYMENT_ERROR_CODES.NETWORK_ERROR
+      };
+    }
+
+    return {
+      success: false,
+      gatewayId: 'nextpay',
+      message: 'Gateway error',
+      messagePersian: 'خطای درگاه پرداخت',
+      errorCode: PAYMENT_ERROR_CODES.GATEWAY_ERROR
+    };
+  }
+
+  getGatewayInfo() {
+    return {
+      id: 'nextpay',
+      name: 'NextPay',
+      namePersian: 'نکست‌پی',
+      logo: '/images/gateways/nextpay.png',
+      isAvailable: true,
+      processingFee: 0,
+      supportedCurrencies: ['IRR', 'IRT'],
+      description: 'Reliable payment with NextPay',
+      descriptionPersian: 'پرداخت قابل اعتماد با نکست‌پی'
+    };
+  }
+}
+
+export default new NextPayService();

@@ -1,0 +1,345 @@
+// src/components/checkout/ShippingForm.tsx
+import React, { useState } from 'react';
+import { MapPin, Phone, User, Truck, Clock } from 'lucide-react';
+import { ShippingAddress, ShippingMethod, Province, City } from '../../types/order';
+
+interface ShippingFormProps {
+  shippingAddress: Partial<ShippingAddress>;
+  billingAddress: Partial<ShippingAddress>;
+  useSameAddress: boolean;
+  selectedShippingMethod?: ShippingMethod;
+  onShippingAddressChange: (address: Partial<ShippingAddress>) => void;
+  onBillingAddressChange: (address: Partial<ShippingAddress>) => void;
+  onToggleSameAddress: () => void;
+  onShippingMethodSelect: (method: ShippingMethod) => void;
+}
+
+const PROVINCES: Province[] = [
+  {
+    id: 'tehran',
+    name: 'Tehran',
+    namePersian: 'تهران',
+    cities: [
+      { id: 'tehran-city', name: 'Tehran', namePersian: 'تهران', provinceId: 'tehran' },
+      { id: 'karaj', name: 'Karaj', namePersian: 'کرج', provinceId: 'tehran' }
+    ]
+  },
+  {
+    id: 'isfahan',
+    name: 'Isfahan',
+    namePersian: 'اصفهان',
+    cities: [
+      { id: 'isfahan-city', name: 'Isfahan', namePersian: 'اصفهان', provinceId: 'isfahan' },
+      { id: 'najafabad', name: 'Najafabad', namePersian: 'نجف‌آباد', provinceId: 'isfahan' }
+    ]
+  },
+  {
+    id: 'shiraz',
+    name: 'Fars',
+    namePersian: 'فارس',
+    cities: [
+      { id: 'shiraz-city', name: 'Shiraz', namePersian: 'شیراز', provinceId: 'shiraz' },
+      { id: 'marvdasht', name: 'Marvdasht', namePersian: 'مرودشت', provinceId: 'shiraz' }
+    ]
+  }
+];
+
+const SHIPPING_METHODS: ShippingMethod[] = [
+  {
+    id: 'standard',
+    name: 'Standard Delivery',
+    namePersian: 'ارسال عادی',
+    price: 50000,
+    estimatedDays: 3,
+    description: 'ارسال در ۳ روز کاری'
+  },
+  {
+    id: 'express',
+    name: 'Express Delivery',
+    namePersian: 'ارسال فوری',
+    price: 100000,
+    estimatedDays: 1,
+    description: 'ارسال در ۲۴ ساعت'
+  },
+  {
+    id: 'premium',
+    name: 'Premium Delivery',
+    namePersian: 'ارسال ویژه',
+    price: 150000,
+    estimatedDays: 0,
+    description: 'ارسال در همان روز'
+  }
+];
+
+export const ShippingForm: React.FC<ShippingFormProps> = ({
+  shippingAddress,
+  billingAddress,
+  useSameAddress,
+  selectedShippingMethod,
+  onShippingAddressChange,
+  onBillingAddressChange,
+  onToggleSameAddress,
+  onShippingMethodSelect
+}) => {
+  const [selectedProvince, setSelectedProvince] = useState<string>(shippingAddress.province || '');
+  const [availableCities, setAvailableCities] = useState<City[]>([]);
+
+  const handleProvinceChange = (provinceId: string) => {
+    const province = PROVINCES.find(p => p.id === provinceId);
+    setSelectedProvince(provinceId);
+    setAvailableCities(province?.cities || []);
+    onShippingAddressChange({ province: province?.namePersian || '' });
+  };
+
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('fa-IR').format(price) + ' تومان';
+  };
+
+  return (
+    <div className="space-y-8">
+      {/* Shipping Address */}
+      <div className="bg-white rounded-xl shadow-sm border p-6">
+        <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center">
+          <MapPin className="w-5 h-5 ml-2 text-alpha-600" />
+          آدرس ارسال
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              نام
+            </label>
+            <div className="relative">
+              <User className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={shippingAddress.firstName || ''}
+                onChange={(e) => onShippingAddressChange({ firstName: e.target.value })}
+                className="w-full pr-10 pl-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-alpha-500 focus:border-transparent"
+                placeholder="نام خود را وارد کنید"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              نام خانوادگی
+            </label>
+            <input
+              type="text"
+              value={shippingAddress.lastName || ''}
+              onChange={(e) => onShippingAddressChange({ lastName: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-alpha-500 focus:border-transparent"
+              placeholder="نام خانوادگی خود را وارد کنید"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              شماره تلفن
+            </label>
+            <div className="relative">
+              <Phone className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="tel"
+                value={shippingAddress.phoneNumber || ''}
+                onChange={(e) => onShippingAddressChange({ phoneNumber: e.target.value })}
+                className="w-full pr-10 pl-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-alpha-500 focus:border-transparent"
+                placeholder="09123456789"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              استان
+            </label>
+            <select
+              value={selectedProvince}
+              onChange={(e) => handleProvinceChange(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-alpha-500 focus:border-transparent"
+            >
+              <option value="">انتخاب استان</option>
+              {PROVINCES.map(province => (
+                <option key={province.id} value={province.id}>
+                  {province.namePersian}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              شهر
+            </label>
+            <select
+              value={shippingAddress.city || ''}
+              onChange={(e) => onShippingAddressChange({ city: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-alpha-500 focus:border-transparent"
+              disabled={!selectedProvince}
+            >
+              <option value="">انتخاب شهر</option>
+              {availableCities.map(city => (
+                <option key={city.id} value={city.namePersian}>
+                  {city.namePersian}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              آدرس کامل
+            </label>
+            <textarea
+              value={shippingAddress.address || ''}
+              onChange={(e) => onShippingAddressChange({ address: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-alpha-500 focus:border-transparent"
+              rows={3}
+              placeholder="آدرس کامل خود را وارد کنید"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              کد پستی
+            </label>
+            <input
+              type="text"
+              value={shippingAddress.postalCode || ''}
+              onChange={(e) => onShippingAddressChange({ postalCode: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-alpha-500 focus:border-transparent"
+              placeholder="1234567890"
+              maxLength={10}
+            />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              توضیحات تحویل (اختیاری)
+            </label>
+            <textarea
+              value={shippingAddress.specialInstructions || ''}
+              onChange={(e) => onShippingAddressChange({ specialInstructions: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-alpha-500 focus:border-transparent"
+              rows={2}
+              placeholder="توضیحات ویژه برای تحویل سفارش"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Billing Address */}
+      <div className="bg-white rounded-xl shadow-sm border p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-lg font-bold text-gray-900 flex items-center">
+            <MapPin className="w-5 h-5 ml-2 text-alpha-600" />
+            آدرس صورتحساب
+          </h3>
+          
+          <label className="flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              checked={useSameAddress}
+              onChange={onToggleSameAddress}
+              className="w-4 h-4 text-alpha-600 border-gray-300 rounded focus:ring-alpha-500"
+            />
+            <span className="mr-2 text-sm text-gray-700">
+              همان آدرس ارسال
+            </span>
+          </label>
+        </div>
+
+        {!useSameAddress && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                نام
+              </label>
+              <input
+                type="text"
+                value={billingAddress.firstName || ''}
+                onChange={(e) => onBillingAddressChange({ firstName: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-alpha-500 focus:border-transparent"
+                placeholder="نام خود را وارد کنید"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                نام خانوادگی
+              </label>
+              <input
+                type="text"
+                value={billingAddress.lastName || ''}
+                onChange={(e) => onBillingAddressChange({ lastName: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-alpha-500 focus:border-transparent"
+                placeholder="نام خانوادگی خود را وارد کنید"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                آدرس کامل
+              </label>
+              <textarea
+                value={billingAddress.address || ''}
+                onChange={(e) => onBillingAddressChange({ address: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-alpha-500 focus:border-transparent"
+                rows={3}
+                placeholder="آدرس کامل خود را وارد کنید"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Shipping Methods */}
+      <div className="bg-white rounded-xl shadow-sm border p-6">
+        <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center">
+          <Truck className="w-5 h-5 ml-2 text-alpha-600" />
+          روش ارسال
+        </h3>
+
+        <div className="space-y-4">
+          {SHIPPING_METHODS.map(method => (
+            <div
+              key={method.id}
+              className={`p-4 border-2 rounded-xl cursor-pointer transition-all duration-200 hover:shadow-md ${
+                selectedShippingMethod?.id === method.id
+                  ? 'border-alpha-600 bg-alpha-50'
+                  : 'border-gray-200 hover:border-alpha-300'
+              }`}
+              onClick={() => onShippingMethodSelect(method)}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3 space-x-reverse">
+                  <input
+                    type="radio"
+                    checked={selectedShippingMethod?.id === method.id}
+                    onChange={() => onShippingMethodSelect(method)}
+                    className="w-4 h-4 text-alpha-600 border-gray-300 focus:ring-alpha-500"
+                  />
+                  <div>
+                    <h4 className="font-medium text-gray-900">
+                      {method.namePersian}
+                    </h4>
+                    <p className="text-sm text-gray-600 flex items-center mt-1">
+                      <Clock className="w-4 h-4 ml-1" />
+                      {method.description}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-left">
+                  <span className="text-lg font-bold text-alpha-600">
+                    {formatPrice(method.price)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};

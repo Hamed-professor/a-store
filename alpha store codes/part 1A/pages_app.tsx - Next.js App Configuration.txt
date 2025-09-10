@@ -1,0 +1,192 @@
+/**
+ * Next.js App Component
+ * Configures the entire Α Store application with brand context and global styles
+ */
+
+import type { AppProps } from 'next/app';
+import { useEffect } from 'react';
+import Head from 'next/head';
+import { BrandProvider } from '@/components/brand/BrandProvider';
+import { ALPHA_BRAND_CONFIG } from '@/utils/brand';
+import '@/styles/globals.css';
+
+// Font loading optimization
+const preloadFonts = [
+  '/fonts/IranSans-Regular.woff2',
+  '/fonts/IranSans-Bold.woff2',
+  '/fonts/Vazir-Regular.woff2',
+  '/fonts/Vazir-Bold.woff2'
+];
+
+export default function App({ Component, pageProps }: AppProps) {
+  // Performance monitoring
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') {
+      // Web Vitals reporting
+      import('web-vitals').then(({ getCLS, getFID, getFCP, getLCP, getTTFB }) => {
+        getCLS(console.log);
+        getFID(console.log);
+        getFCP(console.log);
+        getLCP(console.log);
+        getTTFB(console.log);
+      });
+    }
+  }, []);
+
+  // Error boundary fallback
+  const handleError = (error: Error, errorInfo: any) => {
+    console.error('Α Store Error:', error, errorInfo);
+    // In production, you might want to send this to an error reporting service
+  };
+
+  return (
+    <>
+      <Head>
+        {/* Primary Meta Tags */}
+        <title>{ALPHA_BRAND_CONFIG.siteName} - {ALPHA_BRAND_CONFIG.description}</title>
+        <meta name="title" content={`${ALPHA_BRAND_CONFIG.siteName} - ${ALPHA_BRAND_CONFIG.description}`} />
+        <meta name="description" content={ALPHA_BRAND_CONFIG.description} />
+        <meta name="author" content={ALPHA_BRAND_CONFIG.author} />
+        <meta name="version" content={ALPHA_BRAND_CONFIG.version} />
+        
+        {/* Viewport and Mobile */}
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content={ALPHA_BRAND_CONFIG.siteName} />
+        
+        {/* Theme Colors */}
+        <meta name="theme-color" content="#f9f6f0" />
+        <meta name="msapplication-TileColor" content="#d4af37" />
+        <meta name="msapplication-navbutton-color" content="#d4af37" />
+        
+        {/* Favicons */}
+        <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+        
+        {/* Manifest */}
+        <link rel="manifest" href="/manifest.json" />
+        
+        {/* Open Graph */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={`https://${ALPHA_BRAND_CONFIG.primaryDomain}`} />
+        <meta property="og:title" content={`${ALPHA_BRAND_CONFIG.siteName} - ${ALPHA_BRAND_CONFIG.description}`} />
+        <meta property="og:description" content={ALPHA_BRAND_CONFIG.description} />
+        <meta property="og:image" content={`https://${ALPHA_BRAND_CONFIG.primaryDomain}/og-image.jpg`} />
+        <meta property="og:site_name" content={ALPHA_BRAND_CONFIG.siteName} />
+        <meta property="og:locale" content="fa_IR" />
+        <meta property="og:locale:alternate" content="en_US" />
+        
+        {/* Twitter */}
+        <meta property="twitter:card" content="summary_large_image" />
+        <meta property="twitter:url" content={`https://${ALPHA_BRAND_CONFIG.primaryDomain}`} />
+        <meta property="twitter:title" content={`${ALPHA_BRAND_CONFIG.siteName} - ${ALPHA_BRAND_CONFIG.description}`} />
+        <meta property="twitter:description" content={ALPHA_BRAND_CONFIG.description} />
+        <meta property="twitter:image" content={`https://${ALPHA_BRAND_CONFIG.primaryDomain}/twitter-image.jpg`} />
+        
+        {/* Alternative Domains */}
+        {ALPHA_BRAND_CONFIG.backupDomains.map(domain => (
+          <link key={domain} rel="alternate" href={`https://${domain}`} />
+        ))}
+        
+        {/* DNS Prefetch */}
+        <link rel="dns-prefetch" href={`//${ALPHA_BRAND_CONFIG.primaryDomain}`} />
+        {ALPHA_BRAND_CONFIG.backupDomains.map(domain => (
+          <link key={domain} rel="dns-prefetch" href={`//${domain}`} />
+        ))}
+        
+        {/* Font Preloading */}
+        {preloadFonts.map(font => (
+          <link
+            key={font}
+            rel="preload"
+            href={font}
+            as="font"
+            type="font/woff2"
+            crossOrigin="anonymous"
+          />
+        ))}
+        
+        {/* Structured Data */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'Organization',
+              name: ALPHA_BRAND_CONFIG.siteName,
+              url: `https://${ALPHA_BRAND_CONFIG.primaryDomain}`,
+              description: ALPHA_BRAND_CONFIG.description,
+              logo: `https://${ALPHA_BRAND_CONFIG.primaryDomain}/alpha-store-logo.svg`,
+              sameAs: ALPHA_BRAND_CONFIG.backupDomains.map(domain => `https://${domain}`),
+              contactPoint: {
+                '@type': 'ContactPoint',
+                contactType: 'customer service',
+                availableLanguage: ['Persian', 'English']
+              }
+            })
+          }}
+        />
+        
+        {/* RTL Support */}
+        <meta name="direction" content="rtl" />
+        <meta httpEquiv="Content-Language" content="fa,en" />
+        
+        {/* Security Headers */}
+        <meta httpEquiv="X-Content-Type-Options" content="nosniff" />
+        <meta httpEquiv="X-Frame-Options" content="DENY" />
+        <meta httpEquiv="X-XSS-Protection" content="1; mode=block" />
+        
+        {/* Performance Hints */}
+        <meta httpEquiv="X-DNS-Prefetch-Control" content="on" />
+        
+        {/* No-cache for development */}
+        {process.env.NODE_ENV === 'development' && (
+          <>
+            <meta httpEquiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+            <meta httpEquiv="Pragma" content="no-cache" />
+            <meta httpEquiv="Expires" content="0" />
+          </>
+        )}
+      </Head>
+
+      <BrandProvider
+        defaultTheme="light"
+        defaultDirection="rtl"
+        storageEnabled={true}
+      >
+        <div id="alpha-store-app" className="min-h-screen bg-alpha-ivory text-alpha-black">
+          {/* Skip Link for Accessibility */}
+          <a
+            href="#main-content"
+            className="alpha-skip-link focus:top-4 focus:left-4 bg-alpha-gold text-alpha-black px-4 py-2 rounded-md font-medium"
+          >
+            پرش به محتوای اصلی
+          </a>
+          
+          {/* Main Application */}
+          <main id="main-content" className="relative">
+            <Component {...pageProps} />
+          </main>
+          
+          {/* Development Tools */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="fixed bottom-4 left-4 z-50">
+              <details className="bg-alpha-black-800 text-alpha-ivory p-2 rounded text-xs">
+                <summary className="cursor-pointer">Dev Tools</summary>
+                <div className="mt-2 space-y-1">
+                  <div>Theme: <span id="current-theme">-</span></div>
+                  <div>Direction: <span id="current-direction">-</span></div>
+                  <div>Version: {ALPHA_BRAND_CONFIG.version}</div>
+                </div>
+              </details>
+            </div>
+          )}
+        </div>
+      </BrandProvider>
+    </>
+  );
+}

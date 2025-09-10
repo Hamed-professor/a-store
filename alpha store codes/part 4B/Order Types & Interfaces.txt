@@ -1,0 +1,121 @@
+// src/types/order.ts
+export interface ShippingAddress {
+  id?: string;
+  firstName: string;
+  lastName: string;
+  phoneNumber: string;
+  province: string;
+  city: string;
+  address: string;
+  postalCode: string;
+  specialInstructions?: string;
+}
+
+export interface ShippingMethod {
+  id: string;
+  name: string;
+  namePersian: string;
+  price: number;
+  estimatedDays: number;
+  description: string;
+}
+
+export interface OrderItem {
+  id: string;
+  productId: string;
+  name: string;
+  namePersian: string;
+  price: number;
+  quantity: number;
+  image: string;
+  variant?: {
+    size?: string;
+    color?: string;
+  };
+}
+
+export interface Order {
+  id: string;
+  orderNumber: string;
+  userId?: string;
+  items: OrderItem[];
+  shippingAddress: ShippingAddress;
+  billingAddress: ShippingAddress;
+  shippingMethod: ShippingMethod;
+  paymentMethod: string;
+  subtotal: number;
+  shippingCost: number;
+  tax: number;
+  total: number;
+  status: OrderStatus;
+  createdAt: Date;
+  updatedAt: Date;
+  trackingNumber?: string;
+  estimatedDelivery?: Date;
+  notes?: string;
+}
+
+export enum OrderStatus {
+  PENDING = 'pending',
+  CONFIRMED = 'confirmed',
+  PROCESSING = 'processing',
+  SHIPPED = 'shipped',
+  DELIVERED = 'delivered',
+  CANCELLED = 'cancelled',
+  REFUNDED = 'refunded'
+}
+
+export interface OrderStatusInfo {
+  status: OrderStatus;
+  label: string;
+  labelPersian: string;
+  color: string;
+  icon: string;
+  description: string;
+}
+
+export interface CheckoutStep {
+  id: string;
+  name: string;
+  namePersian: string;
+  isCompleted: boolean;
+  isActive: boolean;
+}
+
+export interface Province {
+  id: string;
+  name: string;
+  namePersian: string;
+  cities: City[];
+}
+
+export interface City {
+  id: string;
+  name: string;
+  namePersian: string;
+  provinceId: string;
+}
+
+export interface Invoice {
+  id: string;
+  orderId: string;
+  invoiceNumber: string;
+  issueDate: Date;
+  dueDate: Date;
+  companyInfo: {
+    name: string;
+    address: string;
+    phone: string;
+    taxId: string;
+    registrationNumber: string;
+  };
+  customerInfo: {
+    name: string;
+    address: string;
+    phone: string;
+  };
+  items: OrderItem[];
+  subtotal: number;
+  tax: number;
+  total: number;
+}

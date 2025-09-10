@@ -1,0 +1,290 @@
+// src/utils/payment.ts
+import { PaymentGateway, PaymentStatus, PaymentError, PAYMENT_ERROR_CODES } from '../types/payment';
+import zarinpalService from '../services/payments/zarinpal';
+import payirService from '../services/payments/payir';
+import nextpayService from '../services/payments/nextpay';
+
+export const formatCurrency = (amount: number, currency: 'IRR' | 'IRT' = 'IRT'): string => {
+  const formatter = new Intl.NumberFormat('fa-IR', {
+    style: 'decimal',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  });
+
+  const formattedAmount = formatter.format(amount);
+  const currencySymbol = currency === 'IRT' ? 'تومان' : 'ریال';
+  
+  return `${formattedAmount} ${currencySymbol}`;
+};
+
+export const convertCurrency = (amount: number, from: 'IRR' | 'IRT', to: 'IRR' | 'IRT'): number => {
+  if (from === to) return amount;
+  
+  if (from === 'IRT' && to === 'IRR') {
+    return amount * 10;
+  }
+  
+  if (from === 'IRR' && to === 'IRT') {
+    return amount / 10;
+  }
+  
+  return amount;
+};
+
+export const validateAmount = (amount: number, currency: 'IRR' | 'IRT'): { isValid: boolean; error?: PaymentError } => {
+  const minAmount = currency === 'IRT' ? 100 : 1000; // 100 Toman = 1000 Rial
+  const maxAmount = currency === 'IRT' ? 50000000 : 500000000; // 50M Toman = 500M Rial
+
+  if (!amount || amount <= 0) {
+    return {
+      isValid: false,
+      error: {
+        code: PAYMENT_ERROR_CODES.INVALID_AMOUNT,
+        message: 'Amount must be greater than zero',
+        messagePersian: 'مبلغ باید بیشتر از صفر باشد',
+        retryable: true
+      }
+    };
+  }
+
+  if (amount < minAmount) {
+    return {
+      isValid: false,
+      error: {
+        code: PAYMENT_ERROR_CODES.INVALID_AMOUNT,
+        message: `Amount must be at least ${formatCurrency(minAmount, currency)}`,
+        messagePersian: `مبلغ باید حداقل ${formatCurrency(minAmount, currency)} باشد`,
+        retryable: true
+      }
+    };
+  }
+
+  if (amount > maxAmount) {
+    return {
+      isValid: false,
+      error: {
+        code: PAYMENT_ERROR_CODES.INVALID_AMOUNT,
+        message: `Amount cannot exceed ${formatCurrency(maxAmount, currency)}`,
+        messagePersian: `مبلغ نمی‌تواند بیشتر از ${formatCurrency(maxAmount, currency)} باشد`,
+        retryable: true
+      }
+    };
+  }
+
+  return { isValid: true };
+};
+
+export const validateMobile = (mobile: string): boolean => {
+  const iranMobileRegex = /^(\+98|0098|98|0)?9\d{9}$/;
+  return iranMobileRegex.test(mobile);
+};
+
+export const validateEmail = (email: string): boolean => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+};
+
+export const normalizeMobile = (mobile: string): string => {
+  // Remove all non-digits
+  const cleaned = mobile.replace(/\D/g, '');
+  
+  // Handle different formats
+  if (cleaned.startsWith('98')) {
+    return `+${cleaned}`;
+  }
+  
+  if (cleaned.startsWith('0')) {
+    return `+98${cleaned.substring(1)}`;
+  }
+  
+  if (cleaned.length === 10 && cleaned.startsWith('9')) {
+    return `+98${cleaned}`;
+  }
+  
+  return mobile;
+};
+
+export const getAvailableGateways = async (): Promise<PaymentGateway[]> => {
+  const gateways: PaymentGateway[] = [];
+  
+  try {
+    // Check ZarinPal availability
+    gateways.push({
+      ...zarinpalService.getGatewayInfo(),
+      isAvailable: true // Assume available for now
+    });
+  } catch (error) {
+    console.warn('ZarinPal not available:', error);
+  }
+
+  try {
+    // Check Pay.ir availability
+    gateways.push({
+      ...payirService.getGatewayInfo(),
+      isAvailable: true // Assume available for now
+    });
+  } catch (error) {
+    console.warn('Pay.ir not available:', error);
+  }
+
+  try {
+    // Check NextPay availability
+    gateways.push({
+      ...nextpayService.getGatewayInfo(),
+      isAvailable: true // Assume available for now
+    });
+  } catch (error) {
+    console.warn('NextPay not available:', error);
+  }
+
+  return gateways.filter(gateway => gateway.isAvailable);
+};
+
+export const generatePaymentDescription = (orderId: string, itemCount: number): string => {
+  return `خرید از α Store - سفارش #${orderId} - ${itemCount} کالا`;
+};
+
+export const generateOrderId = (): string => {
+  const timestamp = Date.now();
+  const random = Math.floor(Math.random() * 1000);
+  return `AS${timestamp}${random}`;
+};
+
+export const createCallbackUrl = (orderId: string, gateway: string): string => {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://alphastore.ir';
+  return `${baseUrl}/payment/callback?order=${orderId}&gateway=${gateway}`;
+};
+
+export const parseCallbackParams = (query: Record<string, string | string[]>): {
+  orderId?: string;
+  gateway?: string;
+  authority?: string;
+  token?: string;
+  transId?: string;
+  status?: string;
+} => {
+  const getString = (value: string | string[] | undefined): string | undefined => {
+    if (Array.isArray(value)) return value[0];
+    return value;
+  };
+
+  return {
+    orderId: getString(query.order),
+    gateway: getString(query.gateway),
+    authority: getString(query.Authority) || getString(query.authority),
+    token: getString(query.token),
+    transId: getString(query.trans_id),
+    status: getString(query.Status) || getString(query.status)
+  };
+};
+
+export const getPaymentStatusColor = (status: PaymentStatus): string => {
+  const colorMap: Record<PaymentStatus, string> = {
+    [PaymentStatus.PENDING]: 'text-yellow-600',
+    [PaymentStatus.PROCESSING]: 'text-blue-600',
+    [PaymentStatus.COMPLETED]: 'text-green-600',
+    [PaymentStatus.FAILED]: 'text-red-600',
+    [PaymentStatus.CANCELLED]: 'text-gray-600',
+    [PaymentStatus.REFUNDED]: 'text-orange-600',
+    [PaymentStatus.EXPIRED]: 'text-red-400'
+  };
+
+  return colorMap[status] || 'text-gray-600';
+};
+
+export const getPaymentStatusLabel = (status: PaymentStatus): { en: string; fa: string } => {
+  const labelMap: Record<PaymentStatus, { en: string; fa: string }> = {
+    [PaymentStatus.PENDING]: { en: 'Pending', fa: 'در انتظار' },
+    [PaymentStatus.PROCESSING]: { en: 'Processing', fa: 'در حال پردازش' },
+    [PaymentStatus.COMPLETED]: { en: 'Completed', fa: 'تکمیل شده' },
+    [PaymentStatus.FAILED]: { en: 'Failed', fa: 'ناموفق' },
+    [PaymentStatus.CANCELLED]: { en: 'Cancelled', fa: 'لغو شده' },
+    [PaymentStatus.REFUNDED]: { en: 'Refunded', fa: 'بازگردانده شده' },
+    [PaymentStatus.EXPIRED]: { en: 'Expired', fa: 'منقضی شده' }
+  };
+
+  return labelMap[status] || { en: 'Unknown', fa: 'نامشخص' };
+};
+
+export const calculateProcessingFee = (amount: number, gateway: PaymentGateway): number => {
+  return Math.round(amount * gateway.processingFee / 100);
+};
+
+export const calculateTotalAmount = (amount: number, gateway: PaymentGateway): number => {
+  return amount + calculateProcessingFee(amount, gateway);
+};
+
+export const isRetryableError = (errorCode: string): boolean => {
+  const retryableErrors = [
+    PAYMENT_ERROR_CODES.NETWORK_ERROR,
+    PAYMENT_ERROR_CODES.GATEWAY_ERROR,
+    PAYMENT_ERROR_CODES.UNKNOWN_ERROR
+  ];
+  
+  return retryableErrors.includes(errorCode as any);
+};
+
+export const shouldAutoRetry = (errorCode: string, attemptCount: number): boolean => {
+  if (attemptCount >= 3) return false;
+  
+  const autoRetryErrors = [
+    PAYMENT_ERROR_CODES.NETWORK_ERROR
+  ];
+  
+  return autoRetryErrors.includes(errorCode as any);
+};
+
+export const getRetryDelay = (attemptCount: number): number => {
+  // Exponential backoff: 1s, 2s, 4s
+  return Math.pow(2, attemptCount) * 1000;
+};
+
+export const sanitizePaymentLog = (data: any): any => {
+  // Remove sensitive information from payment logs
+  const sensitive = ['card_pan', 'cardNumber', 'card_holder'];
+  const sanitized = { ...data };
+  
+  sensitive.forEach(key => {
+    if (sanitized[key]) {
+      const value = sanitized[key].toString();
+      if (value.length > 4) {
+        sanitized[key] = `****${value.slice(-4)}`;
+      }
+    }
+  });
+  
+  return sanitized;
+};
+
+export const generatePaymentToken = (orderId: string, amount: number): string => {
+  // Simple token generation for additional security
+  const payload = `${orderId}-${amount}-${Date.now()}`;
+  return Buffer.from(payload).toString('base64');
+};
+
+export const validatePaymentToken = (token: string, orderId: string, amount: number): boolean => {
+  try {
+    const decoded = Buffer.from(token, 'base64').toString();
+    const [tokenOrderId, tokenAmount] = decoded.split('-');
+    
+    return tokenOrderId === orderId && parseInt(tokenAmount) === amount;
+  } catch (error) {
+    return false;
+  }
+};
+
+export const formatPaymentReceipt = (verification: any): string => {
+  const receiptLines = [
+    'α Store - رسید پرداخت',
+    '═══════════════════════',
+    `شماره تراکنش: ${verification.transactionId}`,
+    `شماره سفارش: ${verification.orderId}`,
+    `مبلغ: ${formatCurrency(verification.amount, verification.currency)}`,
+    `درگاه: ${verification.gatewayId}`,
+    `تاریخ: ${new Date(verification.verifiedAt).toLocaleDateString('fa-IR')}`,
+    '═══════════════════════',
+    'با تشکر از خرید شما'
+  ];
+  
+  return receiptLines.join('\n');
+};

@@ -1,0 +1,113 @@
+// pages/orders/index.tsx
+import React, { useState } from 'react';
+import OrderManager from '../../src/components/Order/OrderManager';
+import OrderDetail from '../../src/components/Order/OrderDetail';
+import InvoiceGenerator from '../../src/components/Invoice/InvoiceGenerator';
+
+// Mock data - در پروژه واقعی از API دریافت می‌شود
+const mockOrders = [
+  {
+    id: 'ORD-2024-001',
+    customerName: 'احمد محمدی',
+    customerEmail: 'ahmad@email.com',
+    customerPhone: '09123456789',
+    status: 'processing' as const,
+    total: 2850000,
+    items: 3,
+    date: '1403/06/15',
+    paymentStatus: 'paid' as const,
+    shippingAddress: 'تهران، خیابان ولیعصر، پلاک 123'
+  },
+  {
+    id: 'ORD-2024-002',
+    customerName: 'فاطمه کریمی',
+    customerEmail: 'fateme@email.com',
+    customerPhone: '09134567890',
+    status: 'shipped' as const,
+    total: 1200000,
+    items: 2,
+    date: '1403/06/14',
+    paymentStatus: 'paid' as const,
+    shippingAddress: 'اصفهان، خیابان چهارباغ، پلاک 45'
+  },
+  {
+    id: 'ORD-2024-003',
+    customerName: 'علی رضایی',
+    customerEmail: 'ali@email.com',
+    customerPhone: '09145678901',
+    status: 'pending' as const,
+    total: 950000,
+    items: 1,
+    date: '1403/06/13',
+    paymentStatus: 'pending' as const,
+    shippingAddress: 'شیراز، خیابان زند، پلاک 78'
+  }
+];
+
+const OrdersPage: React.FC = () => {
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [showInvoice, setShowInvoice] = useState(false);
+  const [invoiceOrder, setInvoiceOrder] = useState(null);
+
+  const handleOrderClick = (order) => {
+    setSelectedOrder(order);
+  };
+
+  const handleInvoiceClick = (order) => {
+    setInvoiceOrder(order);
+    setShowInvoice(true);
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50" dir="rtl">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center gap-8">
+              <div className="text-2xl font-bold text-blue-600">α فروشگاه</div>
+              <h1 className="text-xl font-semibold text-gray-900">مدیریت سفارشات</h1>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="text-left">
+                <div className="text-sm font-medium text-gray-900">مدیر سیستم</div>
+                <div className="text-xs text-gray-500">admin@alpha-store.ir</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <OrderManager
+          orders={mockOrders}
+          onOrderClick={handleOrderClick}
+          onInvoiceClick={handleInvoiceClick}
+        />
+      </div>
+
+      {/* Order Detail Modal */}
+      {selectedOrder && (
+        <OrderDetail 
+          order={selectedOrder}
+          onClose={() => setSelectedOrder(null)}
+          onInvoiceClick={handleInvoiceClick}
+        />
+      )}
+
+      {/* Invoice Modal */}
+      {showInvoice && invoiceOrder && (
+        <InvoiceGenerator
+          order={invoiceOrder}
+          onClose={() => {
+            setShowInvoice(false);
+            setInvoiceOrder(null);
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+export default OrdersPage;

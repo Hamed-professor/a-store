@@ -1,0 +1,101 @@
+// src/components/checkout/CheckoutSteps.tsx
+import React from 'react';
+import { CheckCircle, Circle, ArrowRight } from 'lucide-react';
+import { CheckoutStep } from '../../types/order';
+
+interface CheckoutStepsProps {
+  steps: CheckoutStep[];
+  currentStep: number;
+  onStepClick?: (stepIndex: number) => void;
+}
+
+export const CheckoutSteps: React.FC<CheckoutStepsProps> = ({
+  steps,
+  currentStep,
+  onStepClick
+}) => {
+  return (
+    <div className="w-full py-6">
+      <div className="flex items-center justify-between max-w-4xl mx-auto">
+        {steps.map((step, index) => (
+          <React.Fragment key={step.id}>
+            <div
+              className={`flex flex-col items-center cursor-pointer transition-all duration-200 ${
+                step.isActive ? 'scale-105' : ''
+              }`}
+              onClick={() => onStepClick?.(index)}
+            >
+              {/* Step Circle */}
+              <div
+                className={`relative flex items-center justify-center w-12 h-12 rounded-full border-2 mb-2 transition-all duration-200 ${
+                  step.isCompleted
+                    ? 'bg-alpha-600 border-alpha-600 text-white'
+                    : step.isActive
+                    ? 'bg-alpha-50 border-alpha-600 text-alpha-600'
+                    : 'bg-gray-50 border-gray-300 text-gray-400'
+                }`}
+              >
+                {step.isCompleted ? (
+                  <CheckCircle className="w-6 h-6" />
+                ) : (
+                  <Circle className="w-6 h-6" />
+                )}
+                
+                {/* Step Number */}
+                <span
+                  className={`absolute text-sm font-bold ${
+                    step.isCompleted
+                      ? 'text-white'
+                      : step.isActive
+                      ? 'text-alpha-600'
+                      : 'text-gray-400'
+                  }`}
+                >
+                  {index + 1}
+                </span>
+              </div>
+
+              {/* Step Label */}
+              <div className="text-center">
+                <p
+                  className={`text-sm font-medium ${
+                    step.isActive
+                      ? 'text-alpha-600'
+                      : step.isCompleted
+                      ? 'text-alpha-600'
+                      : 'text-gray-500'
+                  }`}
+                >
+                  {step.namePersian}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {step.name}
+                </p>
+              </div>
+            </div>
+
+            {/* Connector Line */}
+            {index < steps.length - 1 && (
+              <div className="flex items-center flex-1 px-4">
+                <ArrowRight
+                  className={`w-5 h-5 transition-colors duration-200 ${
+                    steps[index + 1].isCompleted || steps[index + 1].isActive
+                      ? 'text-alpha-600'
+                      : 'text-gray-300'
+                  }`}
+                />
+                <div
+                  className={`flex-1 h-0.5 mx-2 transition-colors duration-200 ${
+                    steps[index + 1].isCompleted || steps[index + 1].isActive
+                      ? 'bg-alpha-600'
+                      : 'bg-gray-300'
+                  }`}
+                />
+              </div>
+            )}
+          </React.Fragment>
+        ))}
+      </div>
+    </div>
+  );
+};

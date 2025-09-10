@@ -1,0 +1,270 @@
+// src/services/payments/payir.ts
+import axios, { AxiosError } from 'axios';
+import {
+  PaymentRequest,
+  PaymentResponse,
+  PaymentVerification,
+  PayIrRequest,
+  PayIrResponse,
+  PayIrVerifyRequest,
+  PayIrVerifyResponse,
+  PAYMENT_ERROR_CODES
+} from '../../types/payment';
+
+class PayIrService {
+  private readonly apiKey: string;
+  private readonly baseUrl = 'https://pay.ir/pg';
+
+  constructor() {
+    this.apiKey = process.env.PAYIR_API_KEY || '';
+    
+    if (!this.apiKey) {
+      throw new Error('Pay.ir API key is required');
+    }
+  }
+
+  async requestPayment(paymentData: PaymentRequest): Promise<PaymentResponse> {
+    try {
+      const requestData: PayIrRequest = {
+        api: this.apiKey,
+        amount: this.convertToRials(paymentData.amount, paymentData.currency),
+        redirect: paymentData.callbackUrl,
+        mobile: paymentData.metadata?.mobile,
+        factorNumber: paymentData.orderId,
+        description: paymentData.descriptionPersian
+      };
+
+      const response = await axios.post<PayIrResponse>(
+        `${this.baseUrl}/send`,
+        requestData,
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          timeout: 30000
+        }
+      );
+
+      if (response.data.status === 1 && response.data.token) {
+        return {
+          success: true,
+          gatewayId: 'payir',
+          token: response.data.token,
+          paymentUrl: `${this.baseUrl}/gateway/${response.data.token}`,
+          message: 'Payment request successful',
+          messagePersian: 'درخواست پرداخت با موفقیت ارسال شد'
+        };
+      }
+
+      return this.handleError(response.data.status, response.data.errorMessage);
+
+    } catch (error) {
+      console.error('Pay.ir request error:', error);
+      return this.handleAxiosError(error as AxiosError);
+    }
+  }
+
+  async verifyPayment(
+    token: string,
+    expectedAmount: number,
+    currency: 'IRR' | 'IRT'
+  ): Promise<PaymentVerification | null> {
+    try {
+      const requestData: PayIrVerifyRequest = {
+        api: this.apiKey,
+        token
+      };
+
+      const response = await axios.post<PayIrVerifyResponse>(
+        `${this.baseUrl}/verify`,
+        requestData,
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          timeout: 30000
+        }
+      );
+
+      if (response.data.status === 1) {
+        const receivedAmount = this.convertFromRials(response.data.amount || 0, currency);
+        
+        // Verify amount matches
+        if (Math.abs(receivedAmount - expectedAmount) > 1) {
+          console.error('Amount mismatch:', { expected: expectedAmount, received: receivedAmount });
+          return null;
+        }
+
+        return {
+          success: true,
+          transactionId: response.data.transId || token,
+          orderId: response.data.factorNumber || '',
+          amount: receivedAmount,
+          currency,
+          gatewayId: 'payir',
+          authority: token,
+          cardPan: response.data.cardNumber,
+          message: 'Payment verified successfully',
+          messagePersian: 'پرداخت با موفقیت تایید شد',
+          verifiedAt: new Date()
+        };
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Pay.ir verify error:', error);
+      return null;
+    }
+  }
+
+  async checkPaymentStatus(token: string): Promise<PaymentResponse> {
+    try {
+      // Pay.ir doesn't have a separate status check endpoint
+      // We use verify for status checking
+      const verification = await this.verifyPayment(token, 0, 'IRR');
+      
+      if (verification) {
+        return {
+          success: true,
+          gatewayId: 'payir',
+          token,
+          message: 'Payment found',
+          messagePersian: 'پرداخت یافت شد'
+        };
+      }
+
+      return {
+        success: false,
+        gatewayId: 'payir',
+        message: 'Payment not found',
+        messagePersian: 'پرداخت یافت نشد'
+      };
+    } catch (error) {
+      console.error('Pay.ir status check error:', error);
+      return {
+        success: false,
+        gatewayId: 'payir',
+        message: 'Status check failed',
+        messagePersian: 'بررسی وضعیت ناموفق'
+      };
+    }
+  }
+
+  private convertToRials(amount: number, currency: 'IRR' | 'IRT'): number {
+    return currency === 'IRT' ? amount * 10 : amount;
+  }
+
+  private convertFromRials(amount: number, currency: 'IRR' | 'IRT'): number {
+    return currency === 'IRT' ? amount / 10 : amount;
+  }
+
+  private handleError(status?: number, errorMessage?: string): PaymentResponse {
+    const errorMap: Record<number, { en: string; fa: string; errorCode: string }> = {
+      0: {
+        en: 'API key is incorrect',
+        fa: 'کلید API اشتباه است',
+        errorCode: PAYMENT_ERROR_CODES.INVALID_MERCHANT
+      },
+      -1: {
+        en: 'Amount is less than 1000 Rials',
+        fa: 'مبلغ کمتر از ۱۰۰۰ ریال است',
+        errorCode: PAYMENT_ERROR_CODES.INVALID_AMOUNT
+      },
+      -2: {
+        en: 'Amount is more than maximum allowed',
+        fa: 'مبلغ بیشتر از حداکثر مجاز است',
+        errorCode: PAYMENT_ERROR_CODES.INVALID_AMOUNT
+      },
+      -3: {
+        en: 'Amount should be numeric',
+        fa: 'مبلغ باید عددی باشد',
+        errorCode: PAYMENT_ERROR_CODES.INVALID_AMOUNT
+      },
+      -4: {
+        en: 'Callback URL is not valid',
+        fa: 'آدرس بازگشت معتبر نیست',
+        errorCode: PAYMENT_ERROR_CODES.GATEWAY_ERROR
+      },
+      -5: {
+        en: 'Description is too long',
+        fa: 'توضیحات بیش از حد طولانی است',
+        errorCode: PAYMENT_ERROR_CODES.GATEWAY_ERROR
+      },
+      -6: {
+        en: 'Mobile number format is incorrect',
+        fa: 'فرمت شماره موبایل اشتباه است',
+        errorCode: PAYMENT_ERROR_CODES.GATEWAY_ERROR
+      },
+      -7: {
+        en: 'Gateway is disabled',
+        fa: 'درگاه غیرفعال است',
+        errorCode: PAYMENT_ERROR_CODES.GATEWAY_ERROR
+      },
+      -8: {
+        en: 'Your IP is not allowed',
+        fa: 'آی‌پی شما مجاز نیست',
+        errorCode: PAYMENT_ERROR_CODES.INVALID_MERCHANT
+      }
+    };
+
+    const error = status !== undefined && errorMap[status] ? errorMap[status] : {
+      en: errorMessage || 'Unknown error',
+      fa: 'خطای نامشخص',
+      errorCode: PAYMENT_ERROR_CODES.UNKNOWN_ERROR
+    };
+
+    return {
+      success: false,
+      gatewayId: 'payir',
+      message: error.en,
+      messagePersian: error.fa,
+      errorCode: error.errorCode
+    };
+  }
+
+  private handleAxiosError(error: AxiosError): PaymentResponse {
+    if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+      return {
+        success: false,
+        gatewayId: 'payir',
+        message: 'Request timeout',
+        messagePersian: 'زمان درخواست به پایان رسید',
+        errorCode: PAYMENT_ERROR_CODES.NETWORK_ERROR
+      };
+    }
+
+    if (!error.response) {
+      return {
+        success: false,
+        gatewayId: 'payir',
+        message: 'Network error',
+        messagePersian: 'خطای شبکه',
+        errorCode: PAYMENT_ERROR_CODES.NETWORK_ERROR
+      };
+    }
+
+    return {
+      success: false,
+      gatewayId: 'payir',
+      message: 'Gateway error',
+      messagePersian: 'خطای درگاه پرداخت',
+      errorCode: PAYMENT_ERROR_CODES.GATEWAY_ERROR
+    };
+  }
+
+  getGatewayInfo() {
+    return {
+      id: 'payir',
+      name: 'Pay.ir',
+      namePersian: 'پی‌دات‌آی‌آر',
+      logo: '/images/gateways/payir.png',
+      isAvailable: true,
+      processingFee: 0,
+      supportedCurrencies: ['IRR', 'IRT'],
+      description: 'Fast payment with Pay.ir',
+      descriptionPersian: 'پرداخت سریع با پی‌دات‌آی‌آر'
+    };
+  }
+}
+
+export default new PayIrService();

@@ -1,0 +1,63 @@
+# .env.example
+# α Store - Iranian Payment Gateway Configuration
+
+# Application Settings
+NODE_ENV=development
+NEXT_PUBLIC_BASE_URL=https://alphastore.ir
+
+# Database Configuration (for payment logging)
+DATABASE_URL=mongodb://localhost:27017/alphastore
+# or
+# DATABASE_URL=postgresql://user:password@localhost:5432/alphastore
+
+# ZarinPal Configuration
+ZARINPAL_MERCHANT_ID=your-zarinpal-merchant-id
+# For sandbox testing, merchant ID should be: 36dp7z89-6de4-40d9-ae0b-b8b4w5lrm0p0 (ZarinPal sandbox merchant ID)
+
+# Pay.ir Configuration
+PAYIR_API_KEY=your-payir-api-key
+
+# NextPay Configuration
+NEXTPAY_API_KEY=your-nextpay-api-key
+
+# JWT Secret for user authentication
+JWT_SECRET=your-super-secret-jwt-key
+
+# Email Service Configuration (for payment receipts)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-email-password
+
+# Redis Configuration (for rate limiting)
+REDIS_URL=redis://localhost:6379
+
+# Webhook Security
+WEBHOOK_SECRET=your-webhook-secret-key
+
+# Analytics
+GOOGLE_ANALYTICS_ID=GA_TRACKING_ID
+
+# Error Reporting
+SENTRY_DSN=your-sentry-dsn
+
+# Rate Limiting
+RATE_LIMIT_MAX_REQUESTS=100
+RATE_LIMIT_WINDOW_MS=3600000
+
+# Payment Settings
+PAYMENT_TIMEOUT_MINUTES=15
+MAX_PAYMENT_AMOUNT_TOMAN=50000000
+MIN_PAYMENT_AMOUNT_TOMAN=100
+
+# Security
+ENCRYPTION_KEY=your-32-character-encryption-key
+HASH_SALT_ROUNDS=12
+
+# Development Settings (only in development)
+DEBUG_PAYMENT_LOGS=true
+SKIP_SSL_VERIFICATION=false
+
+# Production Settings (only in production)
+PAYMENT_LOG_RETENTION_DAYS=90
+ENABLE_PAYMENT_WEBHOOKS=true

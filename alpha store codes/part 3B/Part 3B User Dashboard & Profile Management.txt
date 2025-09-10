@@ -1,0 +1,1730 @@
+// pages/account/addresses.tsx
+import React, { useState } from 'react';
+import { MapPin, Plus, Edit, Trash2, Star } from 'lucide-react';
+import AddressForm from '../../components/account/AddressForm';
+import { useAddresses } from '../../hooks/useAddresses';
+import { Address } from '../../types/user';
+
+const AddressesPage: React.FC = () => {
+  const { addresses, loading, addAddress, updateAddress, deleteAddress, setDefaultAddress } = useAddresses();
+  const [showForm, setShowForm] = useState(false);
+  const [editingAddress, setEditingAddress] = useState<Address | undefined>();
+
+  const handleSaveAddress = async (addressData: Omit<Address, 'id'>) => {
+    if (editingAddress) {
+      return await updateAddress(editingAddress.id, addressData);
+    } else {
+      return await addAddress(addressData);
+    }
+  };
+
+  const handleDeleteAddress = async (id: string) => {
+    if (window.confirm('آیا از حذف این آدرس اطمینان دارید؟')) {
+      await deleteAddress(id);
+    }
+  };
+
+  const handleSetDefault = async (id: string) => {
+    await setDefaultAddress(id);
+  };
+
+  const AddressCard: React.FC<{ address: Address }> = ({ address }) => (
+    <div className={`p-6 rounded-xl border-2 transition-all ${
+      address.isDefault 
+        ? 'border-amber-300 bg-amber-50' 
+        : 'border-gray-200 bg-white hover:shadow-md'
+    }`}>
+      <div className="flex justify-between items-start mb-4">
+        <div className="flex items-center space-x-3 space-x-reverse">
+          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+            address.isDefault 
+              ? 'bg-amber-200 text-amber-700' 
+              : 'bg-gray-100 text-gray-600'
+          }`}>
+            <MapPin className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-900 flex items-center space-x-2 space-x-reverse">
+              <span>{address.title}</span>
+              {address.isDefault && (
+                <Star className="w-4 h-4 text-amber-500 fill-current" />
+              )}
+            </h3>
+            <p className="text-sm text-gray-600">
+              {address.firstName} {address.lastName}
+            </p>
+          </div>
+        </div>
+        
+        <div className="flex items-center space-x-2 space-x-reverse">
+          <button
+            onClick={() => {
+              setEditingAddress(address);
+              setShowForm(true);
+            }}
+            className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+          >
+            <Edit className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => handleDeleteAddress(address.id)}
+            disabled={address.isDefault}
+            className={`p-2 rounded-lg transition-colors ${
+              address.isDefault
+                ? 'text-gray-300 cursor-not-allowed'
+                : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
+            }`}
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-2 text-sm text-gray-600 mb-4">
+        <p>{address.phone}</p>
+        <p>
+          {address.province}, {address.city}
+          {address.district && `, ${address.district}`}
+        </p>
+        <p>{address.address}</p>
+        <p>کد پستی: {address.postalCode}</p>
+      </div>
+
+      {!address.isDefault && (
+        <button
+          onClick={() => handleSetDefault(address.id)}
+          className="text-amber-600 hover:text-amber-700 text-sm font-medium"
+        >
+          انتخاب به عنوان آدرس پیش‌فرض
+        </button>
+      )}
+    </div>
+  );
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6" dir="rtl">
+      <div className="flex justify-between items-center mb-8">
+        <div className="flex items-center space-x-3 space-x-reverse">
+          <div className="w-10 h-10 bg-gradient-to-br from-amber-100 to-orange-100 rounded-lg flex items-center justify-center">
+            <MapPin className="w-5 h-5 text-amber-600" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">آدرس‌های من</h1>
+            <p className="text-gray-600">{addresses.length} آدرس ثبت شده</p>
+          </div>
+        </div>
+        
+        <button
+          onClick={() => {
+            setEditingAddress(undefined);
+            setShowForm(true);
+          }}
+          className="flex items-center space-x-2 space-x-reverse px-4 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg hover:from-amber-600 hover:to-orange-600 transition-all"
+        >
+          <Plus className="w-5 h-5" />
+          <span>افزودن آدرس جدید</span>
+        </button>
+      </div>
+
+      {addresses.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {addresses.map((address) => (
+            <AddressCard key={address.id} address={address} />
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-12">
+          <MapPin className="w-24 h-24 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            هنوز آدرسی اضافه نکرده‌اید
+          </h3>
+          <p className="text-gray-500 mb-6">
+            برای سفارش محصولات، لطفاً آدرس تحویل خود را اضافه کنید
+          </p>
+          <button
+            onClick={() => {
+              setEditingAddress(undefined);
+              setShowForm(true);
+            }}
+            className="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg hover:from-amber-600 hover:to-orange-600 transition-all"
+          >
+            افزودن اولین آدرس
+          </button>
+        </div>
+      )}
+
+      {/* Address Form Modal */}
+      {showForm && (
+        <AddressForm
+          address={editingAddress}
+          onSave={handleSaveAddress}
+          onCancel={() => {
+            setShowForm(false);
+            setEditingAddress(undefined);
+          }}
+          loading={loading}
+        />
+      )}
+    </div>
+  );
+};
+
+export default AddressesPage;
+
+// pages/account/wishlist.tsx
+import React, { useState } from 'react';
+import { Heart, ShoppingCart, Trash2, Share2, Filter, Search } from 'lucide-react';
+import { WishlistItem } from '../../types/user';
+import { formatPrice } from '../../utils/jalali';
+
+const WishlistPage: React.FC = () => {
+  const [wishlistItems, setWishlistItems] = useState<WishlistItem[]>([
+    {
+      id: '1',
+      productId: '1',
+      name: 'پیراهن مردانه پریمیوم',
+      image: '/api/placeholder/200/200',
+      price: 1500000,
+      originalPrice: 2000000,
+      isAvailable: true,
+      addedAt: '2024-01-15T10:30:00Z',
+      category: 'پیراهن',
+    },
+    {
+      id: '2',
+      productId: '2',
+      name: 'کت مردانه رسمی',
+      image: '/api/placeholder/200/200',
+      price: 2800000,
+      isAvailable: true,
+      addedAt: '2024-01-20T14:20:00Z',
+      category: 'کت',
+    },
+    {
+      id: '3',
+      productId: '3',
+      name: 'شلوار مردانه کلاسیک',
+      image: '/api/placeholder/200/200',
+      price: 1200000,
+      isAvailable: false,
+      addedAt: '2024-01-25T09:15:00Z',
+      category: 'شلوار',
+    },
+  ]);
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+
+  const filteredItems = wishlistItems.filter(item => {
+    const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter;
+    return matchesSearch && matchesCategory;
+  });
+
+  const categories = ['all', ...Array.from(new Set(wishlistItems.map(item => item.category)))];
+
+  const removeFromWishlist = (itemId: string) => {
+    setWishlistItems(prev => prev.filter(item => item.id !== itemId));
+  };
+
+  const addToCart = (itemId: string) => {
+    console.log('Add to cart:', itemId);
+    // Implement add to cart logic
+  };
+
+  const WishlistItemCard: React.FC<{ item: WishlistItem }> = ({ item }) => (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden group hover:shadow-md transition-shadow">
+      <div className="relative">
+        <img
+          src={item.image}
+          alt={item.name}
+          className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
+        />
+        {item.originalPrice && (
+          <div className="absolute top-3 right-3 bg-red-500 text-white px-2 py-1 rounded-full text-xs font-medium">
+            {Math.round(((item.originalPrice - item.price) / item.originalPrice) * 100)}%
+          </div>
+        )}
+        {!item.isAvailable && (
+          <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+            <span className="bg-white text-gray-900 px-3 py-1 rounded-full text-sm font-medium">
+              ناموجود
+            </span>
+          </div>
+        )}
+        <button
+          onClick={() => removeFromWishlist(item.id)}
+          className="absolute top-3 left-3 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md hover:bg-red-50 transition-colors"
+        >
+          <Heart className="w-4 h-4 text-red-500 fill-current" />
+        </button>
+      </div>
+      
+      <div className="p-4">
+        <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2">{item.name}</h3>
+        <div className="flex items-center space-x-2 space-x-reverse mb-3">
+          <span className="font-bold text-lg text-gray-900">{formatPrice(item.price)}</span>
+          {item.originalPrice && (
+            <span className="text-sm text-gray-400 line-through">{formatPrice(item.originalPrice)}</span>
+          )}
+        </div>
+        
+        <div className="flex space-x-2 space-x-reverse">
+          <button
+            onClick={() => addToCart(item.id)}
+            disabled={!item.isAvailable}
+            className={`flex-1 flex items-center justify-center space-x-2 space-x-reverse px-4 py-2 rounded-lg transition-colors ${
+              item.isAvailable
+                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600'
+                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+            }`}
+          >
+            <ShoppingCart className="w-4 h-4" />
+            <span>{item.isAvailable ? 'افزودن به سبد' : 'ناموجود'}</span>
+          </button>
+          
+          <button
+            onClick={() => removeFromWishlist(item.id)}
+            className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <Trash2 className="w-4 h-4 text-gray-600" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="p-6" dir="rtl">
+      <div className="flex justify-between items-center mb-8">
+        <div className="flex items-center space-x-3 space-x-reverse">
+          <div className="w-10 h-10 bg-gradient-to-br from-red-100 to-pink-100 rounded-lg flex items-center justify-center">
+            <Heart className="w-5 h-5 text-red-600" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">لیست علاقه‌مندی‌ها</h1>
+            <p className="text-gray-600">{wishlistItems.length} محصول</p>
+          </div>
+        </div>
+        
+        <button className="flex items-center space-x-2 space-x-reverse px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+          <Share2 className="w-4 h-4" />
+          <span>اشتراک‌گذاری</span>
+        </button>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex items-center space-x-4 space-x-reverse">
+            <div className="relative">
+              <Search className="w-5 h-5 text-gray-400 absolute right-3 top-1/2 transform -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="جستجو در علاقه‌مندی‌ها..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pr-10 pl-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              />
+            </div>
+            
+            <div className="flex items-center space-x-2 space-x-reverse">
+              <Filter className="w-5 h-5 text-gray-400" />
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              >
+                <option value="all">همه دسته‌بندی‌ها</option>
+                {categories.filter(cat => cat !== 'all').map((category) => (
+                  <option key={category} value={category}>{category}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Wishlist Grid */}
+      {filteredItems.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredItems.map((item) => (
+            <WishlistItemCard key={item.id} item={item} />
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-12">
+          <Heart className="w-24 h-24 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            {searchTerm || categoryFilter !== 'all' ? 'محصولی یافت نشد' : 'لیست علاقه‌مندی‌ها خالی است'}
+          </h3>
+          <p className="text-gray-500 mb-6">
+            {searchTerm || categoryFilter !== 'all' 
+              ? 'لطفاً فیلترها را تغییر دهید یا عبارت جستجو را اصلاح کنید'
+              : 'محصولات مورد علاقه خود را به این لیست اضافه کنید'
+            }
+          </p>
+          {(!searchTerm && categoryFilter === 'all') && (
+            <button className="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg hover:from-amber-600 hover:to-orange-600 transition-all">
+              مرور محصولات
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default WishlistPage;
+
+// pages/account/settings.tsx
+import React, { useState } from 'react';
+import { Settings, Bell, Globe, Shield, CreditCard, Smartphone, Eye, EyeOff } from 'lucide-react';
+import { useProfile } from '../../hooks/useProfile';
+
+const SettingsPage: React.FC = () => {
+  const { profile, updateProfile } = useProfile();
+  const [loading, setLoading] = useState(false);
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+
+  const [preferences, setPreferences] = useState({
+    language: profile?.preferences.language || 'fa',
+    currency: profile?.preferences.currency || 'toman',
+    notifications: profile?.preferences.notifications || {
+      email: true,
+      sms: true,
+      priceAlerts: true,
+      orderUpdates: true,
+      newsletter: false,
+    },
+    privacy: profile?.preferences.privacy || {
+      showProfile: false,
+      shareWishlist: true,
+    },
+  });
+
+  const handlePreferenceChange = async (section: string, key: string, value: any) => {
+    const newPreferences = {
+      ...preferences,
+      [section]: {
+        ...preferences[section as keyof typeof preferences],
+        [key]: value,
+      },
+    };
+    setPreferences(newPreferences);
+    
+    if (profile) {
+      await updateProfile({
+        preferences: {
+          ...profile.preferences,
+          ...newPreferences,
+        },
+      });
+    }
+  };
+
+  const SettingSection: React.FC<{ 
+    icon: React.ComponentType<any>; 
+    title: string; 
+    children: React.ReactNode 
+  }> = ({ icon: Icon, title, children }) => (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="flex items-center space-x-3 space-x-reverse mb-6">
+        <div className="w-10 h-10 bg-gradient-to-br from-amber-100 to-orange-100 rounded-lg flex items-center justify-center">
+          <Icon className="w-5 h-5 text-amber-600" />
+        </div>
+        <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+      </div>
+      {children}
+    </div>
+  );
+
+  const ToggleSwitch: React.FC<{ 
+    checked: boolean; 
+    onChange: (checked: boolean) => void;
+    disabled?: boolean;
+  }> = ({ checked, onChange, disabled }) => (
+    <button
+      type="button"
+      onClick={() => !disabled && onChange(!checked)}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+        checked ? 'bg-amber-500' : 'bg-gray-200'
+      } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+      disabled={disabled}
+    >
+      <span
+        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+          checked ? 'translate-x-6' : 'translate-x-1'
+        }`}
+      />
+    </button>
+  );
+
+  return (
+    <div className="p-6" dir="rtl">
+      <div className="flex items-center space-x-3 space-x-reverse mb-8">
+        <div className="w-10 h-10 bg-gradient-to-br from-amber-100 to-orange-100 rounded-lg flex items-center justify-center">
+          <Settings className="w-5 h-5 text-amber-600" />
+        </div>
+        <h1 className="text-2xl font-bold text-gray-900">تنظیمات</h1>
+      </div>
+
+      <div className="space-y-8">
+        {/* Language & Currency */}
+        <SettingSection icon={Globe} title="زبان و واحد پول">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">زبان</label>
+              <select
+                value={preferences.language}
+                onChange={(e) => handlePreferenceChange('', 'language', e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              >
+                <option value="fa">فارسی</option>
+                <option value="en">English</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">واحد پول</label>
+              <select
+                value={preferences.currency}
+                onChange={(e) => handlePreferenceChange('', 'currency', e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              >
+                <option value="toman">تومان</option>
+                <option value="rial">ریال</option>
+              </select>
+            </div>
+          </div>
+        </SettingSection>
+
+        {/* Notifications */}
+        <SettingSection icon={Bell} title="اعلان‌ها">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between py-3 border-b border-gray-100">
+              <div>
+                <h3 className="font-medium text-gray-900">ایمیل</h3>
+                <p className="text-sm text-gray-500">دریافت اعلان‌ها از طریق ایمیل</p>
+              </div>
+              <ToggleSwitch
+                checked={preferences.notifications.email}
+                onChange={(checked) => handlePreferenceChange('notifications', 'email', checked)}
+              />
+            </div>
+
+            <div className="flex items-center justify-between py-3 border-b border-gray-100">
+              <div>
+                <h3 className="font-medium text-gray-900">پیامک</h3>
+                <p className="text-sm text-gray-500">دریافت اعلان‌ها از طریق پیامک</p>
+              </div>
+              <ToggleSwitch
+                checked={preferences.notifications.sms}
+                onChange={(checked) => handlePreferenceChange('notifications', 'sms', checked)}
+              />
+            </div>
+
+            <div className="flex items-center justify-between py-3 border-b border-gray-100">
+              <div>
+                <h3 className="font-medium text-gray-900">هشدار قیمت</h3>
+                <p className="text-sm text-gray-500">اطلاع از تغییر قیمت محصولات علاقه‌مندی</p>
+              </div>
+              <ToggleSwitch
+                checked={preferences.notifications.priceAlerts}
+                onChange={(checked) => handlePreferenceChange('notifications', 'priceAlerts', checked)}
+              />
+            </div>
+
+            <div className="flex items-center justify-between py-3 border-b border-gray-100">
+              <div>
+                <h3 className="font-medium text-gray-900">وضعیت سفارش</h3>
+                <p className="text-sm text-gray-500">اطلاع از تغییرات وضعیت سفارشات</p>
+              </div>
+              <ToggleSwitch
+                checked={preferences.notifications.orderUpdates}
+                onChange={(checked) => handlePreferenceChange('notifications', 'orderUpdates', checked)}
+              />
+            </div>
+
+            <div className="flex items-center justify-between py-3">
+              <div>
+                <h3 className="font-medium text-gray-900">خبرنامه</h3>
+                <p className="text-sm text-gray-500">دریافت اخبار و پیشنهادات ویژه</p>
+              </div>
+              <ToggleSwitch
+                checked={preferences.notifications.newsletter}
+                onChange={(checked) => handlePreferenceChange('notifications', 'newsletter', checked)}
+              />
+            </div>
+          </div>
+        </SettingSection>
+
+        {/* Privacy */}
+        <SettingSection icon={Eye} title="حریم خصوصی">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between py-3 border-b border-gray-100">
+              <div>
+                <h3 className="font-medium text-gray-900">نمایش پروفایل</h3>
+                <p className="text-sm text-gray-500">امکان مشاهده پروفایل توسط سایر کاربران</p>
+              </div>
+              <ToggleSwitch
+                checked={preferences.privacy.showProfile}
+                onChange={(checked) => handlePreferenceChange('privacy', 'showProfile', checked)}
+              />
+            </div>
+
+            <div className="flex items-center justify-between py-3">
+              <div>
+                <h3 className="font-medium text-gray-900">اشتراک‌گذاری لیست علاقه‌مندی‌ها</h3>
+                <p className="text-sm text-gray-500">امکان اشتراک‌گذاری لیست علاقه‌مندی‌ها</p>
+              </div>
+              <ToggleSwitch
+                checked={preferences.privacy.shareWishlist}
+                onChange={(checked) => handlePreferenceChange('privacy', 'shareWishlist', checked)}
+              />
+            </div>
+          </div>
+        </SettingSection>
+
+        {/* Security */}
+        <SettingSection icon={Shield} title="امنیت">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between py-3 border-b border-gray-100">
+              <div>
+                <h3 className="font-medium text-gray-900">احراز هویت دومرحله‌ای</h3>
+                <p className="text-sm text-gray-500">افزایش امنیت حساب با احراز هویت دومرحله‌ای</p>
+              </div>
+              <ToggleSwitch
+                checked={twoFactorEnabled}
+                onChange={setTwoFactorEnabled}
+              />
+            </div>
+
+            <div className="py-3 border-b border-gray-100">
+              <button className="w-full text-right hover:bg-gray-50 p-3 rounded-lg transition-colors">
+                <div>
+                  <h3 className="font-medium text-gray-900">تاریخچه ورود</h3>
+                  <p className="text-sm text-gray-500">مشاهده تاریخچه ورود به حساب</p>
+                </div>
+              </button>
+            </div>
+
+            <div className="py-3">
+              <button className="w-full text-right hover:bg-gray-50 p-3 rounded-lg transition-colors">
+                <div>
+                  <h3 className="font-medium text-gray-900">دستگاه‌های متصل</h3>
+                  <p className="text-sm text-gray-500">مدیریت دستگاه‌هایی که به حساب شما دسترسی دارند</p>
+                </div>
+              </button>
+            </div>
+          </div>
+        </SettingSection>
+
+        {/* Data Export */}
+        <SettingSection icon={CreditCard} title="داده‌ها">
+          <div className="space-y-4">
+            <div className="py-3 border-b border-gray-100">
+              <button className="w-full text-right hover:bg-gray-50 p-3 rounded-lg transition-colors">
+                <div>
+                  <h3 className="font-medium text-gray-900">دانلود اطلاعات حساب</h3>
+                  <p className="text-sm text-gray-500">دریافت کپی از تمام اطلاعات حساب شما</p>
+                </div>
+              </button>
+            </div>
+
+            <div className="py-3 border-b border-gray-100">
+              <button className="w-full text-right hover:bg-gray-50 p-3 rounded-lg transition-colors">
+                <div>
+                  <h3 className="font-medium text-gray-900">حذف حساب</h3>
+                  <p className="text-sm text-gray-500 text-red-600">حذف دائمی حساب کاربری و تمام داده‌ها</p>
+                </div>
+              </button>
+            </div>
+          </div>
+        </SettingSection>
+      </div>
+    </div>
+  );
+};
+
+export default SettingsPage;
+
+// Main Account App Component
+import React, { useState } from 'react';
+import AccountLayout from './components/account/AccountLayout';
+import Dashboard from './pages/account/dashboard';
+import ProfilePage from './pages/account/profile';
+import OrdersPage from './pages/account/orders';
+import AddressesPage from './pages/account/addresses';
+import WishlistPage from './pages/account/wishlist';
+import SettingsPage from './pages/account/settings';
+
+const AccountApp: React.FC = () => {
+  const [activeTab, setActiveTab] = useState('dashboard');
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'dashboard':
+        return <Dashboard />;
+      case 'profile':
+        return <ProfilePage />;
+      case 'orders':
+        return <OrdersPage />;
+      case 'addresses':
+        return <AddressesPage />;
+      case 'wishlist':
+        return <WishlistPage />;
+      case 'settings':
+        return <SettingsPage />;
+      default:
+        return <Dashboard />;
+    }
+  };
+
+  return (
+    <AccountLayout activeTab={activeTab} onTabChange={setActiveTab}>
+      {renderContent()}
+    </AccountLayout>
+  );
+};
+
+export default AccountApp;// pages/account/dashboard.tsx
+import React from 'react';
+import { 
+  Package, 
+  Heart, 
+  MapPin, 
+  ShoppingBag, 
+  TrendingUp, 
+  Clock, 
+  CheckCircle,
+  Star,
+  Gift,
+  CreditCard,
+  User
+} from 'lucide-react';
+import { useProfile } from '../../hooks/useProfile';
+import { useOrders } from '../../hooks/useOrders';
+import { formatJalaliDate, formatPrice } from '../../utils/jalali';
+
+const Dashboard: React.FC = () => {
+  const { profile } = useProfile();
+  const { orders } = useOrders();
+
+  const recentOrders = orders.slice(0, 3);
+  const stats = {
+    totalOrders: orders.length,
+    deliveredOrders: orders.filter(o => o.status === 'delivered').length,
+    totalSpent: orders.reduce((sum, order) => sum + order.total, 0),
+    savedItems: 12, // Mock data
+  };
+
+  const completionPercentage = (() => {
+    let completed = 0;
+    const total = 6;
+    
+    if (profile?.firstName && profile?.lastName) completed++;
+    if (profile?.email && profile?.isEmailVerified) completed++;
+    if (profile?.phone && profile?.isPhoneVerified) completed++;
+    if (profile?.birthDate) completed++;
+    if (profile?.avatar) completed++;
+    if (profile?.nationalId) completed++;
+    
+    return Math.round((completed / total) * 100);
+  })();
+
+  const quickActions = [
+    {
+      icon: Package,
+      title: 'مشاهده سفارشات',
+      description: 'پیگیری وضعیت سفارشات شما',
+      color: 'bg-blue-500',
+      action: () => console.log('View orders'),
+    },
+    {
+      icon: Heart,
+      title: 'لیست علاقه‌مندی‌ها',
+      description: 'محصولات مورد علاقه شما',
+      color: 'bg-red-500',
+      action: () => console.log('View wishlist'),
+    },
+    {
+      icon: MapPin,
+      title: 'آدرس‌های من',
+      description: 'مدیریت آدرس‌های تحویل',
+      color: 'bg-green-500',
+      action: () => console.log('Manage addresses'),
+    },
+    {
+      icon: User,
+      title: 'ویرایش پروفایل',
+      description: 'بروزرسانی اطلاعات شخصی',
+      color: 'bg-purple-500',
+      action: () => console.log('Edit profile'),
+    },
+  ];
+
+  const recommendations = [
+    {
+      id: '1',
+      name: 'پیراهن مردانه کلاسیک',
+      price: 1200000,
+      originalPrice: 1500000,
+      image: '/api/placeholder/120/120',
+      discount: 20,
+    },
+    {
+      id: '2',
+      name: 'کت مردانه رسمی',
+      price: 2800000,
+      originalPrice: 3500000,
+      image: '/api/placeholder/120/120',
+      discount: 20,
+    },
+    {
+      id: '3',
+      name: 'شلوار مردانه اسپرت',
+      price: 800000,
+      image: '/api/placeholder/120/120',
+    },
+  ];
+
+  return (
+    <div className="p-6" dir="rtl">
+      {/* Welcome Header */}
+      <div className="mb-8">
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-6 border border-amber-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4 space-x-reverse">
+              {profile?.avatar ? (
+                <img 
+                  src={profile.avatar} 
+                  alt="Avatar" 
+                  className="w-16 h-16 rounded-full object-cover border-4 border-white shadow-lg"
+                />
+              ) : (
+                <div className="w-16 h-16 bg-gradient-to-br from-amber-200 to-orange-200 rounded-full flex items-center justify-center border-4 border-white shadow-lg">
+                  <User className="w-8 h-8 text-amber-600" />
+                </div>
+              )}
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">
+                  سلام {profile?.firstName || 'کاربر گرامی'} 👋
+                </h1>
+                <p className="text-gray-600 mt-1">
+                  به پنل کاربری α Store خوش آمدید
+                </p>
+              </div>
+            </div>
+            <div className="text-left">
+              <div className="text-sm text-gray-600">امتیاز شما</div>
+              <div className="flex items-center space-x-1 space-x-reverse text-amber-600">
+                <Star className="w-4 h-4 fill-current" />
+                <span className="font-bold">۱,۲۵۰</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">کل سفارشات</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.totalOrders}</p>
+            </div>
+            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+              <Package className="w-6 h-6 text-blue-600" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">تحویل شده</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.deliveredOrders}</p>
+            </div>
+            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+              <CheckCircle className="w-6 h-6 text-green-600" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">کل خرید</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {formatPrice(stats.totalSpent).split(' ')[0]}
+              </p>
+              <p className="text-xs text-gray-500">تومان</p>
+            </div>
+            <div className="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center">
+              <CreditCard className="w-6 h-6 text-amber-600" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">علاقه‌مندی‌ها</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.savedItems}</p>
+            </div>
+            <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+              <Heart className="w-6 h-6 text-red-600" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left Column */}
+        <div className="lg:col-span-2 space-y-8">
+          {/* Account Completion */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">تکمیل اطلاعات حساب</h2>
+              <span className="text-sm font-medium text-amber-600">{completionPercentage}%</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
+              <div 
+                className="bg-gradient-to-r from-amber-500 to-orange-500 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${completionPercentage}%` }}
+              ></div>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              با تکمیل اطلاعات حساب خود، از تخفیف‌های ویژه و پیشنهادات شخصی‌سازی شده بهره‌مند شوید.
+            </p>
+            {completionPercentage < 100 && (
+              <button className="text-amber-600 hover:text-amber-700 text-sm font-medium">
+                تکمیل اطلاعات →
+              </button>
+            )}
+          </div>
+
+          {/* Recent Orders */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-semibold text-gray-900">آخرین سفارشات</h2>
+              <button className="text-amber-600 hover:text-amber-700 text-sm font-medium">
+                مشاهده همه →
+              </button>
+            </div>
+            
+            {recentOrders.length > 0 ? (
+              <div className="space-y-4">
+                {recentOrders.map((order) => (
+                  <div key={order.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center space-x-4 space-x-reverse">
+                      <div className="w-12 h-12 bg-gradient-to-br from-amber-100 to-orange-100 rounded-lg flex items-center justify-center">
+                        <Package className="w-6 h-6 text-amber-600" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">#{order.orderNumber}</p>
+                        <p className="text-sm text-gray-500">{formatJalaliDate(order.createdAt)}</p>
+                      </div>
+                    </div>
+                    <div className="text-left">
+                      <p className="font-medium text-gray-900">{formatPrice(order.total)}</p>
+                      <span className={`text-xs px-2 py-1 rounded-full ${
+                        order.status === 'delivered' 
+                          ? 'bg-green-100 text-green-800' 
+                          : order.status === 'shipped'
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {order.status === 'delivered' ? 'تحویل شده' : 
+                         order.status === 'shipped' ? 'ارسال شده' : 'در حال پردازش'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center// types/user.ts
+export interface User {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  avatar?: string;
+  birthDate?: string;
+  nationalId?: string;
+  isEmailVerified: boolean;
+  isPhoneVerified: boolean;
+  createdAt: string;
+  lastLogin: string;
+  preferences: UserPreferences;
+}
+
+export interface UserPreferences {
+  language: 'fa' | 'en';
+  currency: 'rial' | 'toman';
+  notifications: {
+    email: boolean;
+    sms: boolean;
+    priceAlerts: boolean;
+    orderUpdates: boolean;
+    newsletter: boolean;
+  };
+  privacy: {
+    showProfile: boolean;
+    shareWishlist: boolean;
+  };
+}
+
+export interface Address {
+  id: string;
+  title: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  province: string;
+  city: string;
+  district: string;
+  address: string;
+  postalCode: string;
+  isDefault: boolean;
+}
+
+export interface Order {
+  id: string;
+  orderNumber: string;
+  status: 'pending' | 'confirmed' | 'preparing' | 'shipped' | 'delivered' | 'cancelled' | 'returned';
+  total: number;
+  items: OrderItem[];
+  shippingAddress: Address;
+  createdAt: string;
+  deliveredAt?: string;
+  trackingNumber?: string;
+}
+
+export interface OrderItem {
+  id: string;
+  productId: string;
+  name: string;
+  image: string;
+  price: number;
+  quantity: number;
+  variant?: string;
+}
+
+export interface WishlistItem {
+  id: string;
+  productId: string;
+  name: string;
+  image: string;
+  price: number;
+  originalPrice?: number;
+  isAvailable: boolean;
+  addedAt: string;
+  category?: string;
+}
+
+// utils/jalali.ts
+export const jalaliMonths = [
+  'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور',
+  'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'
+];
+
+export const jalaliDays = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه'];
+
+export function formatJalaliDate(date: string | Date): string {
+  const d = new Date(date);
+  // Simplified Jalali conversion for demonstration
+  // In production, use a proper Jalali date library
+  return `${d.getDate()} ${jalaliMonths[d.getMonth()]} ${d.getFullYear() + 621}`;
+}
+
+export function formatPersianNumber(num: number): string {
+  const persianDigits = '۰۱۲۳۴۵۶۷۸۹';
+  return num.toString().replace(/[0-9]/g, (d) => persianDigits[parseInt(d)]);
+}
+
+export function formatPrice(price: number, currency: 'rial' | 'toman' = 'toman'): string {
+  const amount = currency === 'toman' ? price / 10 : price;
+  const formatted = amount.toLocaleString('fa-IR');
+  return `${formatted} ${currency === 'toman' ? 'تومان' : 'ریال'}`;
+}
+
+// hooks/useProfile.ts
+import { useState, useEffect } from 'react';
+import { User } from '../types/user';
+
+export function useProfile() {
+  const [profile, setProfile] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  const fetchProfile = async () => {
+    try {
+      setLoading(true);
+      // Mock API call
+      const response = await new Promise<User>((resolve) => {
+        setTimeout(() => {
+          resolve({
+            id: '1',
+            firstName: 'علی',
+            lastName: 'احمدی',
+            email: 'ali@example.com',
+            phone: '09123456789',
+            avatar: '',
+            birthDate: '1990-05-15',
+            nationalId: '1234567890',
+            isEmailVerified: true,
+            isPhoneVerified: true,
+            createdAt: '2024-01-15T10:30:00Z',
+            lastLogin: new Date().toISOString(),
+            preferences: {
+              language: 'fa',
+              currency: 'toman',
+              notifications: {
+                email: true,
+                sms: true,
+                priceAlerts: true,
+                orderUpdates: true,
+                newsletter: false,
+              },
+              privacy: {
+                showProfile: false,
+                shareWishlist: true,
+              },
+            },
+          });
+        }, 1000);
+      });
+      setProfile(response);
+    } catch (err) {
+      setError('خطا در بارگیری اطلاعات کاربر');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateProfile = async (updates: Partial<User>) => {
+    try {
+      setLoading(true);
+      // Mock API call
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      if (profile) {
+        setProfile({ ...profile, ...updates });
+      }
+      return true;
+    } catch (err) {
+      setError('خطا در بروزرسانی اطلاعات');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const uploadAvatar = async (file: File) => {
+    try {
+      setLoading(true);
+      // Mock upload
+      const url = URL.createObjectURL(file);
+      await updateProfile({ avatar: url });
+      return true;
+    } catch (err) {
+      setError('خطا در آپلود تصویر');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const changePassword = async (currentPassword: string, newPassword: string) => {
+    try {
+      setLoading(true);
+      // Mock API call
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      return true;
+    } catch (err) {
+      setError('خطا در تغییر رمز عبور');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return {
+    profile,
+    loading,
+    error,
+    updateProfile,
+    uploadAvatar,
+    changePassword,
+    refetch: fetchProfile,
+  };
+}
+
+// hooks/useOrders.ts
+import { useState, useEffect } from 'react';
+import { Order } from '../types/user';
+
+export function useOrders() {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  const fetchOrders = async () => {
+    try {
+      setLoading(true);
+      // Mock API call
+      const response = await new Promise<Order[]>((resolve) => {
+        setTimeout(() => {
+          resolve([
+            {
+              id: '1',
+              orderNumber: 'ORD-2024-001',
+              status: 'delivered',
+              total: 2500000,
+              items: [
+                {
+                  id: '1',
+                  productId: '1',
+                  name: 'پیراهن مردانه پریمیوم',
+                  image: '/api/placeholder/80/80',
+                  price: 1500000,
+                  quantity: 1,
+                },
+                {
+                  id: '2',
+                  productId: '2',
+                  name: 'شلوار مردانه کلاسیک',
+                  image: '/api/placeholder/80/80',
+                  price: 1000000,
+                  quantity: 1,
+                }
+              ],
+              shippingAddress: {
+                id: '1',
+                title: 'منزل',
+                firstName: 'علی',
+                lastName: 'احمدی',
+                phone: '09123456789',
+                province: 'تهران',
+                city: 'تهران',
+                district: 'ونک',
+                address: 'خیابان ولیعصر، کوچه ۱۰',
+                postalCode: '1234567890',
+                isDefault: true,
+              },
+              createdAt: '2024-01-20T10:30:00Z',
+              deliveredAt: '2024-01-25T14:20:00Z',
+              trackingNumber: 'TRK123456789',
+            },
+            {
+              id: '2',
+              orderNumber: 'ORD-2024-002',
+              status: 'shipped',
+              total: 1800000,
+              items: [
+                {
+                  id: '3',
+                  productId: '3',
+                  name: 'کت مردانه رسمی',
+                  image: '/api/placeholder/80/80',
+                  price: 1800000,
+                  quantity: 1,
+                }
+              ],
+              shippingAddress: {
+                id: '1',
+                title: 'منزل',
+                firstName: 'علی',
+                lastName: 'احمدی',
+                phone: '09123456789',
+                province: 'تهران',
+                city: 'تهران',
+                district: 'ونک',
+                address: 'خیابان ولیعصر، کوچه ۱۰',
+                postalCode: '1234567890',
+                isDefault: true,
+              },
+              createdAt: '2024-02-01T09:15:00Z',
+              trackingNumber: 'TRK987654321',
+            },
+          ]);
+        }, 1000);
+      });
+      setOrders(response);
+    } catch (err) {
+      setError('خطا در بارگیری سفارشات');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const reorder = async (orderId: string) => {
+    try {
+      const order = orders.find(o => o.id === orderId);
+      if (!order) return false;
+      
+      // Mock adding items to cart
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      return true;
+    } catch (err) {
+      setError('خطا در تکرار سفارش');
+      return false;
+    }
+  };
+
+  return {
+    orders,
+    loading,
+    error,
+    reorder,
+    refetch: fetchOrders,
+  };
+}
+
+// hooks/useAddresses.ts
+import { useState, useEffect } from 'react';
+import { Address } from '../types/user';
+
+export function useAddresses() {
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchAddresses();
+  }, []);
+
+  const fetchAddresses = async () => {
+    try {
+      setLoading(true);
+      // Mock API call
+      const response = await new Promise<Address[]>((resolve) => {
+        setTimeout(() => {
+          resolve([
+            {
+              id: '1',
+              title: 'منزل',
+              firstName: 'علی',
+              lastName: 'احمدی',
+              phone: '09123456789',
+              province: 'تهران',
+              city: 'تهران',
+              district: 'ونک',
+              address: 'خیابان ولیعصر، کوچه ۱۰، پلاک ۵',
+              postalCode: '1234567890',
+              isDefault: true,
+            },
+            {
+              id: '2',
+              title: 'محل کار',
+              firstName: 'علی',
+              lastName: 'احمدی',
+              phone: '09123456789',
+              province: 'تهران',
+              city: 'تهران',
+              district: 'سعادت‌آباد',
+              address: 'میدان کاج، برج میلاد',
+              postalCode: '0987654321',
+              isDefault: false,
+            },
+          ]);
+        }, 1000);
+      });
+      setAddresses(response);
+    } catch (err) {
+      setError('خطا در بارگیری آدرس‌ها');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addAddress = async (address: Omit<Address, 'id'>) => {
+    try {
+      setLoading(true);
+      // Mock API call
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const newAddress = { ...address, id: Date.now().toString() };
+      setAddresses(prev => [...prev, newAddress]);
+      return true;
+    } catch (err) {
+      setError('خطا در افزودن آدرس');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateAddress = async (id: string, updates: Partial<Address>) => {
+    try {
+      setLoading(true);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      setAddresses(prev => prev.map(addr => 
+        addr.id === id ? { ...addr, ...updates } : addr
+      ));
+      return true;
+    } catch (err) {
+      setError('خطا در بروزرسانی آدرس');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteAddress = async (id: string) => {
+    try {
+      setLoading(true);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      setAddresses(prev => prev.filter(addr => addr.id !== id));
+      return true;
+    } catch (err) {
+      setError('خطا در حذف آدرس');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const setDefaultAddress = async (id: string) => {
+    try {
+      setLoading(true);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      setAddresses(prev => prev.map(addr => ({
+        ...addr,
+        isDefault: addr.id === id
+      })));
+      return true;
+    } catch (err) {
+      setError('خطا در تنظیم آدرس پیش‌فرض');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return {
+    addresses,
+    loading,
+    error,
+    addAddress,
+    updateAddress,
+    deleteAddress,
+    setDefaultAddress,
+    refetch: fetchAddresses,
+  };
+}
+
+// components/account/AccountLayout.tsx
+import React from 'react';
+import { User, Settings, Package, MapPin, Heart, LogOut, Shield } from 'lucide-react';
+import { useProfile } from '../../hooks/useProfile';
+import { formatJalaliDate } from '../../utils/jalali';
+
+interface AccountLayoutProps {
+  children: React.ReactNode;
+  activeTab: string;
+  onTabChange: (tab: string) => void;
+}
+
+const AccountLayout: React.FC<AccountLayoutProps> = ({ children, activeTab, onTabChange }) => {
+  const { profile } = useProfile();
+
+  const menuItems = [
+    { id: 'dashboard', label: 'داشبورد', icon: User },
+    { id: 'profile', label: 'پروفایل', icon: User },
+    { id: 'orders', label: 'سفارشات', icon: Package },
+    { id: 'addresses', label: 'آدرس‌ها', icon: MapPin },
+    { id: 'wishlist', label: 'علاقه‌مندی‌ها', icon: Heart },
+    { id: 'settings', label: 'تنظیمات', icon: Settings },
+    { id: 'security', label: 'امنیت', icon: Shield },
+  ];
+
+  return (
+    <div className="min-h-screen bg-gray-50" dir="rtl">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-6">
+            <div className="flex items-center space-x-4 space-x-reverse">
+              <div className="flex items-center space-x-2 space-x-reverse">
+                <div className="w-8 h-8 bg-gradient-to-br from-amber-400 to-orange-500 rounded-lg flex items-center justify-center">
+                  <span className="text-white font-bold text-lg">α</span>
+                </div>
+                <span className="text-xl font-bold text-gray-900">استور</span>
+              </div>
+              <div className="hidden md:block w-px h-6 bg-gray-300"></div>
+              <h1 className="hidden md:block text-lg text-gray-600">پنل کاربری</h1>
+            </div>
+            
+            {profile && (
+              <div className="flex items-center space-x-4 space-x-reverse">
+                <div className="text-right">
+                  <p className="text-sm font-medium text-gray-900">
+                    {profile.firstName} {profile.lastName}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    آخرین ورود: {formatJalaliDate(profile.lastLogin)}
+                  </p>
+                </div>
+                {profile.avatar ? (
+                  <img 
+                    src={profile.avatar} 
+                    alt="Avatar" 
+                    className="w-10 h-10 rounded-full object-cover border-2 border-amber-200"
+                  />
+                ) : (
+                  <div className="w-10 h-10 bg-gradient-to-br from-amber-100 to-orange-100 rounded-full flex items-center justify-center">
+                    <User className="w-5 h-5 text-amber-600" />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex flex-col lg:flex-row gap-8">
+          {/* Sidebar */}
+          <aside className="w-full lg:w-64 flex-shrink-0">
+            <nav className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="p-6 bg-gradient-to-br from-amber-50 to-orange-50 border-b border-amber-100">
+                <div className="flex items-center space-x-3 space-x-reverse">
+                  <div className="w-12 h-12 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl flex items-center justify-center">
+                    <span className="text-white font-bold text-xl">α</span>
+                  </div>
+                  <div>
+                    <h2 className="font-semibold text-gray-900">حساب کاربری</h2>
+                    <p className="text-sm text-amber-600">مدیریت اطلاعات شخصی</p>
+                  </div>
+                </div>
+              </div>
+              
+              <ul className="py-2">
+                {menuItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <li key={item.id}>
+                      <button
+                        onClick={() => onTabChange(item.id)}
+                        className={`w-full flex items-center space-x-3 space-x-reverse px-6 py-3 text-right transition-colors ${
+                          activeTab === item.id
+                            ? 'bg-amber-50 text-amber-700 border-l-4 border-amber-500'
+                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        }`}
+                      >
+                        <Icon className="w-5 h-5" />
+                        <span className="font-medium">{item.label}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              
+              <div className="border-t border-gray-200 p-4">
+                <button className="w-full flex items-center space-x-3 space-x-reverse px-2 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                  <LogOut className="w-5 h-5" />
+                  <span className="font-medium">خروج از حساب</span>
+                </button>
+              </div>
+            </nav>
+          </aside>
+
+          {/* Main Content */}
+          <main className="flex-1">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 min-h-[600px]">
+              {children}
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AccountLayout;
+
+// components/account/OrderCard.tsx
+import React from 'react';
+import { Package, Eye, RotateCcw, Download, Truck, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Order } from '../../types/user';
+import { formatJalaliDate, formatPrice } from '../../utils/jalali';
+
+interface OrderCardProps {
+  order: Order;
+  onReorder: (orderId: string) => void;
+  onViewDetails: (order: Order) => void;
+}
+
+const OrderCard: React.FC<OrderCardProps> = ({ order, onReorder, onViewDetails }) => {
+  const getStatusIcon = (status: Order['status']) => {
+    switch (status) {
+      case 'pending': return <Clock className="w-4 h-4 text-yellow-500" />;
+      case 'confirmed': return <CheckCircle className="w-4 h-4 text-blue-500" />;
+      case 'preparing': return <Package className="w-4 h-4 text-purple-500" />;
+      case 'shipped': return <Truck className="w-4 h-4 text-indigo-500" />;
+      case 'delivered': return <CheckCircle className="w-4 h-4 text-green-500" />;
+      case 'cancelled': return <XCircle className="w-4 h-4 text-red-500" />;
+      case 'returned': return <RotateCcw className="w-4 h-4 text-orange-500" />;
+      default: return <Clock className="w-4 h-4 text-gray-500" />;
+    }
+  };
+
+  const getStatusLabel = (status: Order['status']) => {
+    const labels = {
+      pending: 'در انتظار تایید',
+      confirmed: 'تایید شده',
+      preparing: 'در حال آماده‌سازی',
+      shipped: 'ارسال شده',
+      delivered: 'تحویل داده شده',
+      cancelled: 'لغو شده',
+      returned: 'مرجوع شده',
+    };
+    return labels[status];
+  };
+
+  const getStatusColor = (status: Order['status']) => {
+    const colors = {
+      pending: 'bg-yellow-100 text-yellow-800',
+      confirmed: 'bg-blue-100 text-blue-800',
+      preparing: 'bg-purple-100 text-purple-800',
+      shipped: 'bg-indigo-100 text-indigo-800',
+      delivered: 'bg-green-100 text-green-800',
+      cancelled: 'bg-red-100 text-red-800',
+      returned: 'bg-orange-100 text-orange-800',
+    };
+    return colors[status];
+  };
+
+  return (
+    <div className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
+      <div className="flex justify-between items-start mb-4">
+        <div className="flex items-center space-x-3 space-x-reverse">
+          <div className="w-10 h-10 bg-gradient-to-br from-amber-100 to-orange-100 rounded-lg flex items-center justify-center">
+            <Package className="w-5 h-5 text-amber-600" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-900">سفارش #{order.orderNumber}</h3>
+            <p className="text-sm text-gray-500">{formatJalaliDate(order.createdAt)}</p>
+          </div>
+        </div>
+        
+        <div className="flex items-center space-x-2 space-x-reverse">
+          {getStatusIcon(order.status)}
+          <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
+            {getStatusLabel(order.status)}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-4">
+        {order.items.slice(0, 3).map((item) => (
+          <img
+            key={item.id}
+            src={item.image}
+            alt={item.name}
+            className="w-12 h-12 rounded-lg object-cover border border-gray-200"
+          />
+        ))}
+        {order.items.length > 3 && (
+          <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center text-xs font-medium text-gray-600">
+            +{order.items.length - 3}
+          </div>
+        )}
+      </div>
+
+      <div className="flex justify-between items-center mb-4">
+        <div>
+          <p className="text-sm text-gray-600">{order.items.length} قلم</p>
+          <p className="font-semibold text-lg text-gray-900">{formatPrice(order.total)}</p>
+        </div>
+        
+        {order.trackingNumber && (
+          <div className="text-left">
+            <p className="text-xs text-gray-500">کد پیگیری</p>
+            <p className="text-sm font-mono text-gray-900">{order.trackingNumber}</p>
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => onViewDetails(order)}
+          className="flex items-center space-x-2 space-x-reverse px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+        >
+          <Eye className="w-4 h-4" />
+          <span>مشاهده جزئیات</span>
+        </button>
+        
+        {order.status === 'delivered' && (
+          <>
+            <button
+              onClick={() => onReorder(order.id)}
+              className="flex items-center space-x-2 space-x-reverse px-4 py-2 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors text-sm"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>سفارش مجدد</span>
+            </button>
+            
+            <button className="flex items-center space-x-2 space-x-reverse px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm">
+              <Download className="w-4 h-4" />
+              <span>دانلود فاکتور</span>
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default OrderCard;
+
+// components/account/AddressForm.tsx
+import React, { useState } from 'react';
+import { MapPin, Save, X } from 'lucide-react';
+import { Address } from '../../types/user';
+
+interface AddressFormProps {
+  address?: Address;
+  onSave: (address: Omit<Address, 'id'>) => Promise<boolean>;
+  onCancel: () => void;
+  loading?: boolean;
+}
+
+const iranianProvinces = [
+  'تهران', 'اصفهان', 'فارس', 'خراسان رضوی', 'آذربایجان شرقی', 'کرمان',
+  'خوزستان', 'مازندران', 'گیلان', 'کرمانشاه', 'سیستان و بلوچستان',
+  'هرمزگان', 'چهارمحال و بختیاری', 'قزوین', 'اردبیل', 'کردستان',
+  'بوشهر', 'لرستان', 'سمنان', 'یزد', 'گلستان', 'قم', 'مرکزی',
+  'زنجان', 'آذربایجان غربی', 'خراسان شمالی', 'خراسان جنوبی', 'البرز',
+  'کهگیلویه و بویراحمد', 'ایلام', 'کوهدبال'
+];
+
+const AddressForm: React.FC<AddressFormProps> = ({ address, onSave, onCancel, loading }) => {
+  const [formData, setFormData] = useState({
+    title: address?.title || '',
+    firstName: address?.firstName || '',
+    lastName: address?.lastName || '',
+    phone: address?.phone || '',
+    province: address?.province || '',
+    city: address?.city || '',
+    district: address?.district || '',
+    address: address?.address || '',
+    postalCode: address?.

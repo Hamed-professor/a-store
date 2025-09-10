@@ -1,0 +1,214 @@
+// src/components/product/ProductSkeleton.tsx
+
+import React from 'react';
+
+interface ProductSkeletonProps {
+  variant?: 'card' | 'list' | 'category';
+  count?: number;
+  className?: string;
+}
+
+const shimmerAnimation = `
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+`;
+
+const SkeletonBase: React.FC<{ className?: string; children?: React.ReactNode }> = ({ 
+  className = '', 
+  children 
+}) => (
+  <div 
+    className={`bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 bg-[length:200%_100%] animate-pulse ${className}`}
+    style={{
+      animation: 'shimmer 2s infinite linear',
+      backgroundImage: 'linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%)'
+    }}
+  >
+    {children}
+  </div>
+);
+
+const ProductCardSkeleton: React.FC = () => (
+  <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100">
+    {/* Image */}
+    <SkeletonBase className="w-full h-64" />
+    
+    {/* Content */}
+    <div className="p-4 space-y-3">
+      {/* Badge */}
+      <SkeletonBase className="w-16 h-6 rounded-full" />
+      
+      {/* Title */}
+      <div className="space-y-2">
+        <SkeletonBase className="w-full h-5 rounded" />
+        <SkeletonBase className="w-3/4 h-5 rounded" />
+      </div>
+      
+      {/* Rating */}
+      <div className="flex items-center space-x-2 rtl:space-x-reverse">
+        <div className="flex space-x-1 rtl:space-x-reverse">
+          {[...Array(5)].map((_, i) => (
+            <SkeletonBase key={i} className="w-4 h-4 rounded" />
+          ))}
+        </div>
+        <SkeletonBase className="w-12 h-4 rounded" />
+      </div>
+      
+      {/* Price */}
+      <div className="space-y-2">
+        <SkeletonBase className="w-24 h-6 rounded" />
+        <SkeletonBase className="w-20 h-4 rounded" />
+      </div>
+      
+      {/* Buttons */}
+      <div className="flex justify-between items-center pt-2">
+        <SkeletonBase className="w-32 h-10 rounded-lg" />
+        <SkeletonBase className="w-10 h-10 rounded-full" />
+      </div>
+    </div>
+  </div>
+);
+
+const ProductListSkeleton: React.FC = () => (
+  <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100 p-4">
+    <div className="flex space-x-4 rtl:space-x-reverse">
+      {/* Image */}
+      <SkeletonBase className="w-32 h-32 rounded-lg flex-shrink-0" />
+      
+      {/* Content */}
+      <div className="flex-1 space-y-3">
+        {/* Badge */}
+        <SkeletonBase className="w-16 h-6 rounded-full" />
+        
+        {/* Title */}
+        <div className="space-y-2">
+          <SkeletonBase className="w-full h-6 rounded" />
+          <SkeletonBase className="w-2/3 h-6 rounded" />
+        </div>
+        
+        {/* Description */}
+        <div className="space-y-1">
+          <SkeletonBase className="w-full h-4 rounded" />
+          <SkeletonBase className="w-3/4 h-4 rounded" />
+        </div>
+        
+        {/* Rating & Price */}
+        <div className="flex justify-between items-center">
+          <div className="flex items-center space-x-2 rtl:space-x-reverse">
+            <div className="flex space-x-1 rtl:space-x-reverse">
+              {[...Array(5)].map((_, i) => (
+                <SkeletonBase key={i} className="w-4 h-4 rounded" />
+              ))}
+            </div>
+            <SkeletonBase className="w-12 h-4 rounded" />
+          </div>
+          <SkeletonBase className="w-24 h-6 rounded" />
+        </div>
+      </div>
+      
+      {/* Actions */}
+      <div className="flex flex-col space-y-2">
+        <SkeletonBase className="w-10 h-10 rounded-full" />
+        <SkeletonBase className="w-24 h-10 rounded-lg" />
+      </div>
+    </div>
+  </div>
+);
+
+const CategoryCardSkeleton: React.FC = () => (
+  <div className="relative overflow-hidden rounded-xl shadow-lg">
+    {/* Background Image */}
+    <SkeletonBase className="w-full h-48" />
+    
+    {/* Overlay Content */}
+    <div className="absolute inset-0 bg-black bg-opacity-40 flex flex-col justify-end p-6">
+      <div className="space-y-2">
+        <SkeletonBase className="w-32 h-8 rounded bg-white bg-opacity-20" />
+        <SkeletonBase className="w-24 h-5 rounded bg-white bg-opacity-20" />
+      </div>
+    </div>
+  </div>
+);
+
+const ProductGallerySkeleton: React.FC = () => (
+  <div className="space-y-4">
+    {/* Main Image */}
+    <SkeletonBase className="w-full h-96 rounded-lg" />
+    
+    {/* Thumbnails */}
+    <div className="flex space-x-2 rtl:space-x-reverse overflow-x-auto">
+      {[...Array(4)].map((_, i) => (
+        <SkeletonBase key={i} className="w-16 h-16 rounded-md flex-shrink-0" />
+      ))}
+    </div>
+  </div>
+);
+
+const ProductGridSkeleton: React.FC<{ count?: number }> = ({ count = 8 }) => (
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+    {[...Array(count)].map((_, index) => (
+      <ProductCardSkeleton key={index} />
+    ))}
+  </div>
+);
+
+const ProductSkeleton: React.FC<ProductSkeletonProps> = ({ 
+  variant = 'card', 
+  count = 1,
+  className = '' 
+}) => {
+  const renderSkeleton = () => {
+    switch (variant) {
+      case 'card':
+        return count === 1 ? (
+          <ProductCardSkeleton />
+        ) : (
+          <ProductGridSkeleton count={count} />
+        );
+      
+      case 'list':
+        return (
+          <div className={`space-y-4 ${className}`}>
+            {[...Array(count)].map((_, index) => (
+              <ProductListSkeleton key={index} />
+            ))}
+          </div>
+        );
+      
+      case 'category':
+        return count === 1 ? (
+          <CategoryCardSkeleton />
+        ) : (
+          <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 ${className}`}>
+            {[...Array(count)].map((_, index) => (
+              <CategoryCardSkeleton key={index} />
+            ))}
+          </div>
+        );
+      
+      default:
+        return <ProductCardSkeleton />;
+    }
+  };
+
+  return (
+    <>
+      <style dangerouslySetInnerHTML={{ __html: shimmerAnimation }} />
+      <div className={className}>
+        {renderSkeleton()}
+      </div>
+    </>
+  );
+};
+
+// Export individual skeleton components for specific use cases
+export {
+  ProductSkeleton as default,
+  ProductCardSkeleton,
+  ProductListSkeleton,
+  CategoryCardSkeleton,
+  ProductGallerySkeleton,
+  ProductGridSkeleton
+};

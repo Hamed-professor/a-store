@@ -1,0 +1,366 @@
+// src/hooks/usePayment.ts
+import { useState, useCallback, useEffect } from 'react';
+import { useRouter } from 'next/router';
+import {
+  PaymentGateway,
+  PaymentRequest,
+  PaymentResponse,
+  PaymentVerification,
+  PaymentStatus,
+  PaymentFormData,
+  PaymentError
+} from '../types/payment';
+import {
+  getAvailableGateways,
+  validateAmount,
+  validateMobile,
+  validateEmail,
+  generateOrderId,
+  createCallbackUrl,
+  generatePaymentDescription,
+  isRetryableError,
+  shouldAutoRetry,
+  getRetryDelay
+} from '../utils/payment';
+
+interface UsePaymentState {
+  gateways: PaymentGateway[];
+  selectedGateway: PaymentGateway | null;
+  isLoading: boolean;
+  isProcessing: boolean;
+  error: PaymentError | null;
+  paymentStatus: PaymentStatus;
+  orderId: string | null;
+  transactionId: string | null;
+  attemptCount: number;
+}
+
+interface UsePaymentActions {
+  loadGateways: () => Promise<void>;
+  selectGateway: (gatewayId: string) => void;
+  initiatePayment: (formData: PaymentFormData, cartItems: any[]) => Promise<boolean>;
+  retryPayment: () => Promise<boolean>;
+  verifyPayment: (params: any) => Promise<PaymentVerification | null>;
+  resetPayment: () => void;
+  clearError: () => void;
+}
+
+export const usePayment = (userId?: string): UsePaymentState & UsePaymentActions => {
+  const router = useRouter();
+  const [state, setState] = useState<UsePaymentState>({
+    gateways: [],
+    selectedGateway: null,
+    isLoading: false,
+    isProcessing: false,
+    error: null,
+    paymentStatus: PaymentStatus.PENDING,
+    orderId: null,
+    transactionId: null,
+    attemptCount: 0
+  });
+
+  const [lastPaymentData, setLastPaymentData] = useState<{
+    formData: PaymentFormData;
+    cartItems: any[];
+  } | null>(null);
+
+  const updateState = useCallback((updates: Partial<UsePaymentState>) => {
+    setState(prev => ({ ...prev, ...updates }));
+  }, []);
+
+  const clearError = useCallback(() => {
+    updateState({ error: null });
+  }, [updateState]);
+
+  const resetPayment = useCallback(() => {
+    setState({
+      gateways: state.gateways, // Keep loaded gateways
+      selectedGateway: null,
+      isLoading: false,
+      isProcessing: false,
+      error: null,
+      paymentStatus: PaymentStatus.PENDING,
+      orderId: null,
+      transactionId: null,
+      attemptCount: 0
+    });
+    setLastPaymentData(null);
+  }, [state.gateways]);
+
+  const loadGateways = useCallback(async () => {
+    try {
+      updateState({ isLoading: true, error: null });
+      const gateways = await getAvailableGateways();
+      updateState({ gateways, isLoading: false });
+      
+      // Auto-select first available gateway
+      if (gateways.length > 0 && !state.selectedGateway) {
+        updateState({ selectedGateway: gateways[0] });
+      }
+    } catch (error) {
+      console.error('Failed to load gateways:', error);
+      updateState({
+        isLoading: false,
+        error: {
+          code: 'GATEWAY_LOAD_ERROR',
+          message: 'Failed to load payment gateways',
+          messagePersian: 'بارگذاری درگاه‌های پرداخت ناموفق بود',
+          retryable: true
+        }
+      });
+    }
+  }, [state.selectedGateway, updateState]);
+
+  const selectGateway = useCallback((gatewayId: string) => {
+    const gateway = state.gateways.find(g => g.id === gatewayId);
+    if (gateway) {
+      updateState({ selectedGateway: gateway, error: null });
+    }
+  }, [state.gateways, updateState]);
+
+  const initiatePayment = useCallback(async (
+    formData: PaymentFormData,
+    cartItems: any[]
+  ): Promise<boolean> => {
+    try {
+      updateState({ isProcessing: true, error: null, attemptCount: 0 });
+      
+      // Store for retry purposes
+      setLastPaymentData({ formData, cartItems });
+
+      // Validation
+      const amountValidation = validateAmount(formData.amount, formData.currency);
+      if (!amountValidation.isValid && amountValidation.error) {
+        updateState({ isProcessing: false, error: amountValidation.error });
+        return false;
+      }
+
+      if (formData.mobile && !validateMobile(formData.mobile)) {
+        updateState({
+          isProcessing: false,
+          error: {
+            code: 'INVALID_MOBILE',
+            message: 'Invalid mobile number format',
+            messagePersian: 'فرمت شماره موبایل اشتباه است',
+            retryable: true
+          }
+        });
+        return false;
+      }
+
+      if (formData.email && !validateEmail(formData.email)) {
+        updateState({
+          isProcessing: false,
+          error: {
+            code: 'INVALID_EMAIL',
+            message: 'Invalid email format',
+            messagePersian: 'فرمت ایمیل اشتباه است',
+            retryable: true
+          }
+        });
+        return false;
+      }
+
+      if (!state.selectedGateway) {
+        updateState({
+          isProcessing: false,
+          error: {
+            code: 'NO_GATEWAY_SELECTED',
+            message: 'No payment gateway selected',
+            messagePersian: 'هیچ درگاه پرداختی انتخاب نشده است',
+            retryable: true
+          }
+        });
+        return false;
+      }
+
+      // Generate order ID and prepare payment request
+      const orderId = generateOrderId();
+      const callbackUrl = createCallbackUrl(orderId, state.selectedGateway.id);
+      const description = generatePaymentDescription(orderId, cartItems.length);
+
+      updateState({ orderId, paymentStatus: PaymentStatus.PROCESSING });
+
+      const paymentRequest: PaymentRequest = {
+        orderId,
+        userId: userId || 'anonymous',
+        amount: formData.amount,
+        currency: formData.currency,
+        description: `α Store Order #${orderId}`,
+        descriptionPersian: description,
+        callbackUrl,
+        gateway: state.selectedGateway.id,
+        metadata: {
+          mobile: formData.mobile,
+          email: formData.email,
+          cartItems: cartItems.map(item => ({
+            id: item.id,
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price
+          }))
+        }
+      };
+
+      // Make payment request to API
+      const response = await fetch('/api/payments/request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        },
+        body: JSON.stringify(paymentRequest)
+      });
+
+      const result: PaymentResponse = await response.json();
+
+      if (result.success && result.paymentUrl) {
+        updateState({
+          transactionId: result.authority || result.token || result.transactionId,
+          paymentStatus: PaymentStatus.PROCESSING
+        });
+
+        // Redirect to payment gateway
+        window.location.href = result.paymentUrl;
+        return true;
+      } else {
+        updateState({
+          isProcessing: false,
+          paymentStatus: PaymentStatus.FAILED,
+          error: {
+            code: result.errorCode || 'PAYMENT_REQUEST_FAILED',
+            message: result.message,
+            messagePersian: result.messagePersian,
+            retryable: isRetryableError(result.errorCode || '')
+          }
+        });
+        return false;
+      }
+    } catch (error) {
+      console.error('Payment initiation error:', error);
+      updateState({
+        isProcessing: false,
+        paymentStatus: PaymentStatus.FAILED,
+        error: {
+          code: 'NETWORK_ERROR',
+          message: 'Network error occurred',
+          messagePersian: 'خطای شبکه رخ داده است',
+          retryable: true
+        }
+      });
+      return false;
+    }
+  }, [state.selectedGateway, userId, updateState]);
+
+  const retryPayment = useCallback(async (): Promise<boolean> => {
+    if (!lastPaymentData) {
+      updateState({
+        error: {
+          code: 'NO_PAYMENT_DATA',
+          message: 'No payment data to retry',
+          messagePersian: 'اطلاعات پرداخت برای تلاش مجدد موجود نیست',
+          retryable: false
+        }
+      });
+      return false;
+    }
+
+    const newAttemptCount = state.attemptCount + 1;
+    updateState({ attemptCount: newAttemptCount });
+
+    // Add delay for auto-retry
+    if (shouldAutoRetry(state.error?.code || '', newAttemptCount)) {
+      const delay = getRetryDelay(newAttemptCount);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+
+    return initiatePayment(lastPaymentData.formData, lastPaymentData.cartItems);
+  }, [lastPaymentData, state.attemptCount, state.error, updateState, initiatePayment]);
+
+  const verifyPayment = useCallback(async (params: {
+    orderId?: string;
+    gateway?: string;
+    authority?: string;
+    token?: string;
+    transId?: string;
+    status?: string;
+  }): Promise<PaymentVerification | null> => {
+    try {
+      updateState({ isProcessing: true, error: null });
+
+      const response = await fetch('/api/payments/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        },
+        body: JSON.stringify(params)
+      });
+
+      const result = await response.json();
+
+      if (result.success && result.verification) {
+        updateState({
+          isProcessing: false,
+          paymentStatus: PaymentStatus.COMPLETED,
+          transactionId: result.verification.transactionId
+        });
+        return result.verification;
+      } else {
+        updateState({
+          isProcessing: false,
+          paymentStatus: PaymentStatus.FAILED,
+          error: {
+            code: 'VERIFICATION_FAILED',
+            message: result.message || 'Payment verification failed',
+            messagePersian: result.messagePersian || 'تایید پرداخت ناموفق بود',
+            retryable: false
+          }
+        });
+        return null;
+      }
+    } catch (error) {
+      console.error('Payment verification error:', error);
+      updateState({
+        isProcessing: false,
+        paymentStatus: PaymentStatus.FAILED,
+        error: {
+          code: 'VERIFICATION_ERROR',
+          message: 'Payment verification error',
+          messagePersian: 'خطا در تایید پرداخت',
+          retryable: true
+        }
+      });
+      return null;
+    }
+  }, [updateState]);
+
+  // Auto-load gateways on mount
+  useEffect(() => {
+    if (state.gateways.length === 0 && !state.isLoading) {
+      loadGateways();
+    }
+  }, [state.gateways.length, state.isLoading, loadGateways]);
+
+  // Auto-retry for certain errors
+  useEffect(() => {
+    if (state.error && shouldAutoRetry(state.error.code, state.attemptCount)) {
+      const timeout = setTimeout(() => {
+        retryPayment();
+      }, getRetryDelay(state.attemptCount));
+
+      return () => clearTimeout(timeout);
+    }
+  }, [state.error, state.attemptCount, retryPayment]);
+
+  return {
+    ...state,
+    loadGateways,
+    selectGateway,
+    initiatePayment,
+    retryPayment,
+    verifyPayment,
+    resetPayment,
+    clearError
+  };
+};

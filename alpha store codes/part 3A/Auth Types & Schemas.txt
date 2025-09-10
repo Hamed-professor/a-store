@@ -1,0 +1,211 @@
+// src/types/auth.ts
+export interface User {
+  id: string;
+  email: string;
+  phone?: string;
+  firstName: string;
+  lastName: string;
+  avatar?: string;
+  emailVerified: boolean;
+  phoneVerified: boolean;
+  createdAt: string;
+  role: 'customer' | 'admin';
+}
+
+export interface AuthState {
+  user: User | null;
+  token: string | null;
+  refreshToken: string | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  error: string | null;
+}
+
+export interface LoginFormData {
+  emailOrPhone: string;
+  password: string;
+  rememberMe: boolean;
+}
+
+export interface RegisterFormData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  password: string;
+  confirmPassword: string;
+  acceptTerms: boolean;
+}
+
+export interface ForgotPasswordData {
+  emailOrPhone: string;
+  method: 'email' | 'sms';
+}
+
+export interface ResetPasswordData {
+  newPassword: string;
+  confirmPassword: string;
+  token: string;
+}
+
+export interface OTPData {
+  code: string;
+  phone?: string;
+  email?: string;
+  type: 'registration' | 'login' | 'password_reset';
+}
+
+// src/schemas/authSchemas.ts
+import * as yup from 'yup';
+
+// Persian phone number regex (+98 format)
+const iranianPhoneRegex = /^(\+98|0)?9\d{9}$/;
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export const loginSchema = yup.object({
+  emailOrPhone: yup
+    .string()
+    .required('وارد کردن ایمیل یا شماره تلفن الزامی است')
+    .test('email-or-phone', 'فرمت ایمیل یا شماره تلفن صحیح نیست', (value) => {
+      if (!value) return false;
+      return emailRegex.test(value) || iranianPhoneRegex.test(value);
+    }),
+  password: yup
+    .string()
+    .required('وارد کردن رمز عبور الزامی است')
+    .min(8, 'رمز عبور باید حداقل ۸ کاراکتر باشد'),
+  rememberMe: yup.boolean().default(false),
+});
+
+export const registerSchema = yup.object({
+  firstName: yup
+    .string()
+    .required('وارد کردن نام الزامی است')
+    .min(2, 'نام باید حداقل ۲ کاراکتر باشد')
+    .matches(/^[\u0600-\u06FF\s]+$/, 'نام باید فقط شامل حروف فارسی باشد'),
+  lastName: yup
+    .string()
+    .required('وارد کردن نام خانوادگی الزامی است')
+    .min(2, 'نام خانوادگی باید حداقل ۲ کاراکتر باشد')
+    .matches(/^[\u0600-\u06FF\s]+$/, 'نام خانوادگی باید فقط شامل حروف فارسی باشد'),
+  email: yup
+    .string()
+    .required('وارد کردن ایمیل الزامی است')
+    .matches(emailRegex, 'فرمت ایمیل صحیح نیست'),
+  phone: yup
+    .string()
+    .required('وارد کردن شماره تلفن الزامی است')
+    .matches(iranianPhoneRegex, 'فرمت شماره تلفن صحیح نیست (مثال: ۰۹۱۲۳۴۵۶۷۸۹)'),
+  password: yup
+    .string()
+    .required('وارد کردن رمز عبور الزامی است')
+    .min(8, 'رمز عبور باید حداقل ۸ کاراکتر باشد')
+    .matches(
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
+      'رمز عبور باید شامل حداقل یک حرف کوچک، یک حرف بزرگ و یک عدد باشد'
+    ),
+  confirmPassword: yup
+    .string()
+    .required('تکرار رمز عبور الزامی است')
+    .oneOf([yup.ref('password')], 'تکرار رمز عبور با رمز عبور مطابقت ندارد'),
+  acceptTerms: yup
+    .boolean()
+    .oneOf([true], 'پذیرش قوانین و مقررات الزامی است'),
+});
+
+export const forgotPasswordSchema = yup.object({
+  emailOrPhone: yup
+    .string()
+    .required('وارد کردن ایمیل یا شماره تلفن الزامی است')
+    .test('email-or-phone', 'فرمت ایمیل یا شماره تلفن صحیح نیست', (value) => {
+      if (!value) return false;
+      return emailRegex.test(value) || iranianPhoneRegex.test(value);
+    }),
+  method: yup.string().oneOf(['email', 'sms']).required(),
+});
+
+export const resetPasswordSchema = yup.object({
+  newPassword: yup
+    .string()
+    .required('وارد کردن رمز عبور جدید الزامی است')
+    .min(8, 'رمز عبور باید حداقل ۸ کاراکتر باشد')
+    .matches(
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
+      'رمز عبور باید شامل حداقل یک حرف کوچک، یک حرف بزرگ و یک عدد باشد'
+    ),
+  confirmPassword: yup
+    .string()
+    .required('تکرار رمز عبور الزامی است')
+    .oneOf([yup.ref('newPassword')], 'تکرار رمز عبور با رمز عبور جدید مطابقت ندارد'),
+});
+
+export const otpSchema = yup.object({
+  code: yup
+    .string()
+    .required('وارد کردن کد تأیید الزامی است')
+    .length(6, 'کد تأیید باید ۶ رقم باشد')
+    .matches(/^\d{6}$/, 'کد تأیید فقط باید شامل اعداد باشد'),
+});
+
+// src/utils/validation.ts
+export const validateIranianPhone = (phone: string): boolean => {
+  const cleanPhone = phone.replace(/\s+/g, '');
+  return iranianPhoneRegex.test(cleanPhone);
+};
+
+export const validateEmail = (email: string): boolean => {
+  return emailRegex.test(email.trim().toLowerCase());
+};
+
+export const getPasswordStrength = (password: string): {
+  score: number;
+  message: string;
+  color: string;
+} => {
+  let score = 0;
+  let message = '';
+  let color = '';
+
+  if (password.length >= 8) score += 1;
+  if (password.length >= 12) score += 1;
+  if (/[a-z]/.test(password)) score += 1;
+  if (/[A-Z]/.test(password)) score += 1;
+  if (/[0-9]/.test(password)) score += 1;
+  if (/[^A-Za-z0-9]/.test(password)) score += 1;
+
+  switch (true) {
+    case score <= 2:
+      message = 'ضعیف';
+      color = 'red';
+      break;
+    case score <= 4:
+      message = 'متوسط';
+      color = 'yellow';
+      break;
+    case score <= 5:
+      message = 'قوی';
+      color = 'green';
+      break;
+    case score === 6:
+      message = 'بسیار قوی';
+      color = 'green';
+      break;
+    default:
+      message = 'ضعیف';
+      color = 'red';
+  }
+
+  return { score, message, color };
+};
+
+export const formatPhoneNumber = (phone: string): string => {
+  const cleaned = phone.replace(/\D/g, '');
+  if (cleaned.startsWith('98')) {
+    return `+${cleaned}`;
+  } else if (cleaned.startsWith('0')) {
+    return `+98${cleaned.substring(1)}`;
+  } else if (cleaned.length === 10) {
+    return `+98${cleaned}`;
+  }
+  return phone;
+};

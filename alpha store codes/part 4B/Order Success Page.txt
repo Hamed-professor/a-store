@@ -1,0 +1,263 @@
+// pages/checkout/success.tsx
+import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
+import { CheckCircle, Download, Eye, ShoppingBag, Home, Package } from 'lucide-react';
+import { useOrder } from '../../src/hooks/useOrder';
+import { Order } from '../../src/types/order';
+
+const OrderSuccessPage: React.FC = () => {
+  const router = useRouter();
+  const { orderId } = router.query;
+  const { getOrderById } = useOrder();
+  const [order, setOrder] = useState<Order | null>(null);
+
+  useEffect(() => {
+    if (orderId && typeof orderId === 'string') {
+      const foundOrder = getOrderById(orderId);
+      setOrder(foundOrder || null);
+    }
+  }, [orderId, getOrderById]);
+
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('fa-IR').format(price) + ' تومان';
+  };
+
+  const formatDate = (date: Date) => {
+    return new Intl.DateTimeFormat('fa-IR', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date);
+  };
+
+  if (!order) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center" dir="rtl">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-alpha-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">در حال بارگذاری اطلاعات سفارش...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50" dir="rtl">
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        {/* Success Header */}
+        <div className="text-center mb-12">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-6">
+            <CheckCircle className="w-12 h-12 text-green-600" />
+          </div>
+          
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            سفارش شما با موفقیت ثبت شد!
+          </h1>
+          <p className="text-lg text-gray-600 mb-4">
+            از خرید شما در Î± Store متشکریم
+          </p>
+          <p className="text-sm text-gray-500">
+            شماره سفارش: <span className="font-mono font-bold text-alpha-600">{order.orderNumber}</span>
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Order Details */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Order Info */}
+            <div className="bg-white rounded-xl shadow-sm border p-6">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">اطلاعات سفارش</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">شماره سفارش</p>
+                  <p className="font-mono font-bold text-alpha-600">{order.orderNumber}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">تاریخ ثبت سفارش</p>
+                  <p className="font-medium">{formatDate(order.createdAt)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">مبلغ کل</p>
+                  <p className="text-xl font-bold text-green-600">{formatPrice(order.total)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">روش پرداخت</p>
+                  <p className="font-medium">پرداخت آنلاین</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Shipping Info */}
+            <div className="bg-white rounded-xl shadow-sm border p-6">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">اطلاعات ارسال</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <p className="text-sm text-gray-600 mb-2">آدرس تحویل</p>
+                  <div className="text-sm space-y-1">
+                    <p className="font-medium">{order.shippingAddress.firstName} {order.shippingAddress.lastName}</p>
+                    <p>{order.shippingAddress.phoneNumber}</p>
+                    <p>{order.shippingAddress.address}</p>
+                    <p>{order.shippingAddress.city}، {order.shippingAddress.province}</p>
+                    <p>کد پستی: {order.shippingAddress.postalCode}</p>
+                  </div>
+                </div>
+                
+                <div>
+                  <p className="text-sm text-gray-600 mb-2">روش ارسال</p>
+                  <div className="bg-alpha-50 border border-alpha-200 rounded-lg p-3">
+                    <p className="font-medium text-alpha-900">{order.shippingMethod.namePersian}</p>
+                    <p className="text-sm text-alpha-700">{order.shippingMethod.description}</p>
+                    <p className="text-sm font-bold text-alpha-600 mt-1">
+                      {formatPrice(order.shippingMethod.price)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Order Items */}
+            <div className="bg-white rounded-xl shadow-sm border p-6">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">محصولات سفارش</h3>
+              
+              <div className="space-y-4">
+                {order.items.map(item => (
+                  <div key={item.id} className="flex items-center space-x-4 space-x-reverse p-4 border border-gray-100 rounded-lg">
+                    <img
+                      src={item.image}
+                      alt={item.namePersian}
+                      className="w-16 h-16 object-cover rounded-lg"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = '/images/placeholder.jpg';
+                      }}
+                    />
+                    
+                    <div className="flex-1">
+                      <h4 className="font-medium text-gray-900">{item.namePersian}</h4>
+                      <p className="text-sm text-gray-600">{item.name}</p>
+                      {item.variant && (
+                        <div className="flex space-x-2 space-x-reverse mt-1">
+                          {item.variant.size && (
+                            <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                              سایز: {item.variant.size}
+                            </span>
+                          )}
+                          {item.variant.color && (
+                            <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                              رنگ: {item.variant.color}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="text-center">
+                      <p className="text-sm text-gray-600">تعداد</p>
+                      <p className="font-medium">{item.quantity}</p>
+                    </div>
+
+                    <div className="text-left">
+                      <p className="font-bold text-alpha-600">
+                        {formatPrice(item.price * item.quantity)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Order Total */}
+              <div className="mt-6 pt-4 border-t space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">مجموع محصولات:</span>
+                  <span>{formatPrice(order.subtotal)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">هزینه ارسال:</span>
+                  <span>{formatPrice(order.shippingCost)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">مالیات:</span>
+                  <span>{formatPrice(order.tax)}</span>
+                </div>
+                <hr className="border-gray-200" />
+                <div className="flex justify-between text-lg font-bold">
+                  <span>مجموع نهایی:</span>
+                  <span className="text-alpha-600">{formatPrice(order.total)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Actions Sidebar */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-xl shadow-sm border p-6 sticky top-8">
+              <h3 className="text-lg font-bold text-gray-900 mb-6">اقدامات</h3>
+              
+              <div className="space-y-4">
+                <button className="w-full flex items-center justify-center px-4 py-3 bg-alpha-600 text-white rounded-lg hover:bg-alpha-700 transition-colors duration-200">
+                  <Eye className="w-4 h-4 ml-2" />
+                  مشاهده جزئیات سفارش
+                </button>
+                
+                <button className="w-full flex items-center justify-center px-4 py-3 border border-alpha-600 text-alpha-600 rounded-lg hover:bg-alpha-50 transition-colors duration-200">
+                  <Download className="w-4 h-4 ml-2" />
+                  دانلود فاکتور
+                </button>
+                
+                <button 
+                  onClick={() => router.push('/orders')}
+                  className="w-full flex items-center justify-center px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                >
+                  <Package className="w-4 h-4 ml-2" />
+                  سفارشات من
+                </button>
+                
+                <button 
+                  onClick={() => router.push('/products')}
+                  className="w-full flex items-center justify-center px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                >
+                  <ShoppingBag className="w-4 h-4 ml-2" />
+                  ادامه خرید
+                </button>
+                
+                <button 
+                  onClick={() => router.push('/')}
+                  className="w-full flex items-center justify-center px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                >
+                  <Home className="w-4 h-4 ml-2" />
+                  صفحه اصلی
+                </button>
+              </div>
+
+              {/* Next Steps */}
+              <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <h4 className="font-medium text-blue-900 mb-2">مراحل بعدی:</h4>
+                <ul className="text-sm text-blue-800 space-y-1">
+                  <li>• بررسی و تأیید سفارش</li>
+                  <li>• آماده‌سازی محصولات</li>
+                  <li>• ارسال سفارش</li>
+                  <li>• اطلاع‌رسانی مراحل از طریق پیامک</li>
+                </ul>
+              </div>
+
+              {/* Support */}
+              <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                <p className="text-sm text-gray-600 text-center">
+                  در صورت داشتن هرگونه سؤال، با پشتیبانی ما تماس بگیرید
+                </p>
+                <p className="text-sm font-bold text-center mt-2">
+                  ۰۲۱-۱۲۳۴۵۶۷۸
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default OrderSuccessPage;

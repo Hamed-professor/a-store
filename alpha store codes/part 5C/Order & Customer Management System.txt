@@ -1,0 +1,1008 @@
+import React, { useState, useMemo } from 'react';
+import { 
+  ShoppingCart, Package, Users, Settings, FileText, 
+  Filter, Search, Download, Eye, Edit, Trash2, 
+  Phone, Mail, MapPin, Calendar, Star, 
+  CheckCircle, Clock, AlertCircle, XCircle,
+  Plus, Save, X, User, Shield, Key,
+  TrendingUp, DollarSign, Activity, Database
+} from 'lucide-react';
+
+// Mock data for orders
+const mockOrders = [
+  {
+    id: 'ORD-2024-001',
+    customerName: 'احمد محمدی',
+    customerEmail: 'ahmad@email.com',
+    status: 'processing',
+    total: 2850000,
+    items: 3,
+    date: '1403/06/15',
+    paymentStatus: 'paid',
+    shippingAddress: 'تهران، خیابان ولیعصر، پلاک 123'
+  },
+  {
+    id: 'ORD-2024-002',
+    customerName: 'فاطمه کریمی',
+    customerEmail: 'fateme@email.com',
+    status: 'shipped',
+    total: 1200000,
+    items: 2,
+    date: '1403/06/14',
+    paymentStatus: 'paid',
+    shippingAddress: 'اصفهان، خیابان چهارباغ، پلاک 45'
+  },
+  {
+    id: 'ORD-2024-003',
+    customerName: 'علی رضایی',
+    customerEmail: 'ali@email.com',
+    status: 'pending',
+    total: 950000,
+    items: 1,
+    date: '1403/06/13',
+    paymentStatus: 'pending',
+    shippingAddress: 'شیراز، خیابان زند، پلاک 78'
+  }
+];
+
+// Mock data for customers
+const mockCustomers = [
+  {
+    id: 'CUST-001',
+    name: 'احمد محمدی',
+    email: 'ahmad@email.com',
+    phone: '09123456789',
+    totalOrders: 15,
+    totalSpent: 12500000,
+    lastOrder: '1403/06/15',
+    status: 'vip',
+    joinDate: '1402/03/10'
+  },
+  {
+    id: 'CUST-002',
+    name: 'فاطمه کریمی',
+    email: 'fateme@email.com',
+    phone: '09134567890',
+    totalOrders: 8,
+    totalSpent: 5600000,
+    lastOrder: '1403/06/14',
+    status: 'regular',
+    joinDate: '1402/08/22'
+  },
+  {
+    id: 'CUST-003',
+    name: 'علی رضایی',
+    email: 'ali@email.com',
+    phone: '09145678901',
+    totalOrders: 3,
+    totalSpent: 2100000,
+    lastOrder: '1403/06/13',
+    status: 'new',
+    joinDate: '1403/05/05'
+  }
+];
+
+const OrderCustomerManagement = () => {
+  const [activeSection, setActiveSection] = useState('orders');
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+
+  // Order Management Component
+  const OrderManager = () => {
+    const filteredOrders = useMemo(() => {
+      return mockOrders.filter(order => {
+        const matchesSearch = order.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            order.id.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
+        return matchesSearch && matchesStatus;
+      });
+    }, [searchQuery, statusFilter]);
+
+    const getStatusColor = (status) => {
+      const colors = {
+        pending: 'text-yellow-600 bg-yellow-50',
+        processing: 'text-blue-600 bg-blue-50',
+        shipped: 'text-green-600 bg-green-50',
+        delivered: 'text-emerald-600 bg-emerald-50',
+        cancelled: 'text-red-600 bg-red-50'
+      };
+      return colors[status] || 'text-gray-600 bg-gray-50';
+    };
+
+    const getStatusIcon = (status) => {
+      const icons = {
+        pending: <Clock className="w-4 h-4" />,
+        processing: <Activity className="w-4 h-4" />,
+        shipped: <Package className="w-4 h-4" />,
+        delivered: <CheckCircle className="w-4 h-4" />,
+        cancelled: <XCircle className="w-4 h-4" />
+      };
+      return icons[status] || <AlertCircle className="w-4 h-4" />;
+    };
+
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex justify-between items-center">
+          <h2 className="text-2xl font-bold text-gray-900">مدیریت سفارشات</h2>
+          <div className="flex gap-3">
+            <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2">
+              <Download className="w-4 h-4" />
+              خروجی اکسل
+            </button>
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex gap-4 flex-wrap">
+            <div className="flex-1 min-w-64">
+              <div className="relative">
+                <Search className="w-5 h-5 absolute right-3 top-3 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="جستجو در سفارشات..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pr-10 pl-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">همه وضعیت‌ها</option>
+              <option value="pending">در انتظار</option>
+              <option value="processing">در حال پردازش</option>
+              <option value="shipped">ارسال شده</option>
+              <option value="delivered">تحویل شده</option>
+              <option value="cancelled">لغو شده</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Orders Table */}
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="text-right p-4 font-semibold text-gray-900">شماره سفارش</th>
+                  <th className="text-right p-4 font-semibold text-gray-900">مشتری</th>
+                  <th className="text-right p-4 font-semibold text-gray-900">وضعیت</th>
+                  <th className="text-right p-4 font-semibold text-gray-900">مبلغ</th>
+                  <th className="text-right p-4 font-semibold text-gray-900">تعداد کالا</th>
+                  <th className="text-right p-4 font-semibold text-gray-900">تاریخ</th>
+                  <th className="text-center p-4 font-semibold text-gray-900">عملیات</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {filteredOrders.map((order) => (
+                  <tr key={order.id} className="hover:bg-gray-50">
+                    <td className="p-4">
+                      <div className="font-medium text-blue-600">{order.id}</div>
+                    </td>
+                    <td className="p-4">
+                      <div className="font-medium text-gray-900">{order.customerName}</div>
+                      <div className="text-sm text-gray-500">{order.customerEmail}</div>
+                    </td>
+                    <td className="p-4">
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
+                        {getStatusIcon(order.status)}
+                        {order.status === 'pending' && 'در انتظار'}
+                        {order.status === 'processing' && 'در حال پردازش'}
+                        {order.status === 'shipped' && 'ارسال شده'}
+                        {order.status === 'delivered' && 'تحویل شده'}
+                        {order.status === 'cancelled' && 'لغو شده'}
+                      </span>
+                    </td>
+                    <td className="p-4">
+                      <div className="font-medium text-gray-900">{order.total.toLocaleString()} تومان</div>
+                    </td>
+                    <td className="p-4 text-gray-600">{order.items} قلم</td>
+                    <td className="p-4 text-gray-600">{order.date}</td>
+                    <td className="p-4">
+                      <div className="flex justify-center gap-2">
+                        <button
+                          onClick={() => setSelectedOrder(order)}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                          title="مشاهده جزئیات"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setShowInvoiceModal(true)}
+                          className="p-2 text-green-600 hover:bg-green-50 rounded-lg"
+                          title="صدور فاکتور"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                        <button className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg" title="ویرایش">
+                          <Edit className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Customer Management Component
+  const CustomerManager = () => {
+    const filteredCustomers = useMemo(() => {
+      return mockCustomers.filter(customer => {
+        return customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+               customer.email.toLowerCase().includes(searchQuery.toLowerCase());
+      });
+    }, [searchQuery]);
+
+    const getStatusColor = (status) => {
+      const colors = {
+        new: 'text-blue-600 bg-blue-50',
+        regular: 'text-green-600 bg-green-50',
+        vip: 'text-purple-600 bg-purple-50'
+      };
+      return colors[status] || 'text-gray-600 bg-gray-50';
+    };
+
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex justify-between items-center">
+          <h2 className="text-2xl font-bold text-gray-900">مدیریت مشتریان</h2>
+          <div className="flex gap-3">
+            <button className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2">
+              <Download className="w-4 h-4" />
+              خروجی CSV
+            </button>
+          </div>
+        </div>
+
+        {/* Search */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="relative max-w-md">
+            <Search className="w-5 h-5 absolute right-3 top-3 text-gray-400" />
+            <input
+              type="text"
+              placeholder="جستجو در مشتریان..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pr-10 pl-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        {/* Customer Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">کل مشتریان</p>
+                <p className="text-2xl font-bold text-gray-900">1,247</p>
+              </div>
+              <Users className="w-8 h-8 text-blue-600" />
+            </div>
+          </div>
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">مشتریان VIP</p>
+                <p className="text-2xl font-bold text-purple-600">89</p>
+              </div>
+              <Star className="w-8 h-8 text-purple-600" />
+            </div>
+          </div>
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">مشتریان جدید</p>
+                <p className="text-2xl font-bold text-green-600">156</p>
+              </div>
+              <TrendingUp className="w-8 h-8 text-green-600" />
+            </div>
+          </div>
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">میانگین خرید</p>
+                <p className="text-2xl font-bold text-indigo-600">2.4M</p>
+              </div>
+              <DollarSign className="w-8 h-8 text-indigo-600" />
+            </div>
+          </div>
+        </div>
+
+        {/* Customers Table */}
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="text-right p-4 font-semibold text-gray-900">مشتری</th>
+                  <th className="text-right p-4 font-semibold text-gray-900">وضعیت</th>
+                  <th className="text-right p-4 font-semibold text-gray-900">تعداد سفارش</th>
+                  <th className="text-right p-4 font-semibold text-gray-900">کل خرید</th>
+                  <th className="text-right p-4 font-semibold text-gray-900">آخرین سفارش</th>
+                  <th className="text-center p-4 font-semibold text-gray-900">عملیات</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {filteredCustomers.map((customer) => (
+                  <tr key={customer.id} className="hover:bg-gray-50">
+                    <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-medium">
+                          {customer.name.charAt(0)}
+                        </div>
+                        <div>
+                          <div className="font-medium text-gray-900">{customer.name}</div>
+                          <div className="text-sm text-gray-500">{customer.email}</div>
+                          <div className="text-sm text-gray-500">{customer.phone}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(customer.status)}`}>
+                        {customer.status === 'new' && 'جدید'}
+                        {customer.status === 'regular' && 'عادی'}
+                        {customer.status === 'vip' && 'VIP'}
+                      </span>
+                    </td>
+                    <td className="p-4 text-gray-600">{customer.totalOrders} سفارش</td>
+                    <td className="p-4">
+                      <div className="font-medium text-gray-900">{customer.totalSpent.toLocaleString()} تومان</div>
+                    </td>
+                    <td className="p-4 text-gray-600">{customer.lastOrder}</td>
+                    <td className="p-4">
+                      <div className="flex justify-center gap-2">
+                        <button
+                          onClick={() => setSelectedCustomer(customer)}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                          title="مشاهده پروفایل"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg" title="ویرایش">
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button className="p-2 text-green-600 hover:bg-green-50 rounded-lg" title="ارسال پیام">
+                          <Mail className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Settings Component
+  const SettingsPanel = () => {
+    const [settings, setSettings] = useState({
+      storeName: 'فروشگاه آلفا',
+      storePhone: '021-12345678',
+      storeEmail: 'info@alpha-store.ir',
+      storeAddress: 'تهران، خیابان ولیعصر، پلاک 123',
+      currency: 'IRR',
+      taxRate: 9,
+      shippingFee: 50000,
+      freeShippingThreshold: 1000000
+    });
+
+    return (
+      <div className="space-y-6">
+        <h2 className="text-2xl font-bold text-gray-900">تنظیمات سیستم</h2>
+
+        {/* General Settings */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">تنظیمات کلی</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">نام فروشگاه</label>
+              <input
+                type="text"
+                value={settings.storeName}
+                onChange={(e) => setSettings({...settings, storeName: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">تلفن فروشگاه</label>
+              <input
+                type="text"
+                value={settings.storePhone}
+                onChange={(e) => setSettings({...settings, storePhone: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">ایمیل فروشگاه</label>
+              <input
+                type="email"
+                value={settings.storeEmail}
+                onChange={(e) => setSettings({...settings, storeEmail: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">آدرس فروشگاه</label>
+              <textarea
+                value={settings.storeAddress}
+                onChange={(e) => setSettings({...settings, storeAddress: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows="3"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Financial Settings */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">تنظیمات مالی</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">نرخ مالیات (%)</label>
+              <input
+                type="number"
+                value={settings.taxRate}
+                onChange={(e) => setSettings({...settings, taxRate: parseFloat(e.target.value)})}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">هزینه ارسال (تومان)</label>
+              <input
+                type="number"
+                value={settings.shippingFee}
+                onChange={(e) => setSettings({...settings, shippingFee: parseInt(e.target.value)})}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">حد ارسال رایگان (تومان)</label>
+              <input
+                type="number"
+                value={settings.freeShippingThreshold}
+                onChange={(e) => setSettings({...settings, freeShippingThreshold: parseInt(e.target.value)})}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* User Management */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">مدیریت کاربران</h3>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-medium">
+                  A
+                </div>
+                <div>
+                  <div className="font-medium">مدیر کل</div>
+                  <div className="text-sm text-gray-500">admin@alpha-store.ir</div>
+                </div>
+              </div>
+              <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">فعال</span>
+            </div>
+            <button className="w-full border-2 border-dashed border-gray-300 rounded-lg p-4 text-gray-600 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-2">
+              <Plus className="w-5 h-5" />
+              افزودن کاربر جدید
+            </button>
+          </div>
+        </div>
+
+        {/* System Tools */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">ابزارهای سیستم</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <button className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
+              <Database className="w-5 h-5 text-blue-600" />
+              <div className="text-right">
+                <div className="font-medium">پشتیبان گیری</div>
+                <div className="text-sm text-gray-500">تهیه نسخه پشتیبان از داده‌ها</div>
+              </div>
+            </button>
+            <button className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
+              <Activity className="w-5 h-5 text-green-600" />
+              <div className="text-right">
+                <div className="font-medium">گزارش سلامت سیستم</div>
+                <div className="text-sm text-gray-500">بررسی عملکرد سیستم</div>
+              </div>
+            </button>
+            <button className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
+              <Shield className="w-5 h-5 text-purple-600" />
+              <div className="text-right">
+                <div className="font-medium">حسابرسی امنیتی</div>
+                <div className="text-sm text-gray-500">بررسی نشت‌های امنیتی</div>
+              </div>
+            </button>
+            <button className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
+              <Key className="w-5 h-5 text-orange-600" />
+              <div className="text-right">
+                <div className="font-medium">مدیریت API</div>
+                <div className="text-sm text-gray-500">تنظیم کلیدهای API</div>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        {/* Save Button */}
+        <div className="flex justify-end">
+          <button className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2">
+            <Save className="w-4 h-4" />
+            ذخیره تنظیمات
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // Order Detail Modal
+  const OrderDetailModal = ({ order, onClose }) => {
+    if (!order) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+            <h3 className="text-xl font-semibold">جزئیات سفارش {order.id}</h3>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          <div className="p-6 space-y-6">
+            {/* Order Info */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <h4 className="font-semibold text-gray-900">اطلاعات سفارش</h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">شماره سفارش:</span>
+                    <span className="font-medium">{order.id}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">تاریخ سفارش:</span>
+                    <span className="font-medium">{order.date}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">وضعیت:</span>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
+                      {order.status === 'pending' && 'در انتظار'}
+                      {order.status === 'processing' && 'در حال پردازش'}
+                      {order.status === 'shipped' && 'ارسال شده'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">وضعیت پرداخت:</span>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${order.paymentStatus === 'paid' ? 'text-green-600 bg-green-50' : 'text-yellow-600 bg-yellow-50'}`}>
+                      {order.paymentStatus === 'paid' ? 'پرداخت شده' : 'در انتظار پرداخت'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="font-semibold text-gray-900">اطلاعات مشتری</h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">نام:</span>
+                    <span className="font-medium">{order.customerName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">ایمیل:</span>
+                    <span className="font-medium">{order.customerEmail}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">آدرس ارسال:</span>
+                    <span className="font-medium text-left">{order.shippingAddress}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Order Items */}
+            <div className="border-t pt-6">
+              <h4 className="font-semibold text-gray-900 mb-4">اقلام سفارش</h4>
+              <div className="space-y-4">
+                <div className="flex items-center gap-4 p-4 border rounded-lg">
+                  <div className="w-16 h-16 bg-gray-200 rounded-lg"></div>
+                  <div className="flex-1">
+                    <h5 className="font-medium">محصول نمونه ۱</h5>
+                    <p className="text-sm text-gray-600">رنگ: آبی، سایز: L</p>
+                  </div>
+                  <div className="text-left">
+                    <p className="font-medium">2 × 1,200,000 تومان</p>
+                    <p className="text-sm text-gray-600">2,400,000 تومان</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 p-4 border rounded-lg">
+                  <div className="w-16 h-16 bg-gray-200 rounded-lg"></div>
+                  <div className="flex-1">
+                    <h5 className="font-medium">محصول نمونه ۲</h5>
+                    <p className="text-sm text-gray-600">رنگ: قرمز، سایز: M</p>
+                  </div>
+                  <div className="text-left">
+                    <p className="font-medium">1 × 450,000 تومان</p>
+                    <p className="text-sm text-gray-600">450,000 تومان</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Order Summary */}
+            <div className="border-t pt-6">
+              <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                <div className="flex justify-between">
+                  <span>جمع اقلام:</span>
+                  <span>2,850,000 تومان</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>هزینه ارسال:</span>
+                  <span>رایگان</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>مالیات:</span>
+                  <span>256,500 تومان</span>
+                </div>
+                <div className="flex justify-between font-semibold text-lg border-t pt-2">
+                  <span>مجموع کل:</span>
+                  <span>{order.total.toLocaleString()} تومان</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-4">
+              <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                به‌روزرسانی وضعیت
+              </button>
+              <button 
+                onClick={() => setShowInvoiceModal(true)}
+                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+              >
+                صدور فاکتور
+              </button>
+              <button className="border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50">
+                چاپ برچسب ارسال
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Customer Profile Modal
+  const CustomerProfileModal = ({ customer, onClose }) => {
+    if (!customer) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+            <h3 className="text-xl font-semibold">پروفایل مشتری</h3>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          <div className="p-6 space-y-6">
+            {/* Customer Info */}
+            <div className="flex items-center gap-4">
+              <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
+                {customer.name.charAt(0)}
+              </div>
+              <div className="flex-1">
+                <h4 className="text-2xl font-bold text-gray-900">{customer.name}</h4>
+                <p className="text-gray-600">{customer.email}</p>
+                <p className="text-gray-600">{customer.phone}</p>
+                <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(customer.status)}`}>
+                  {customer.status === 'new' && 'مشتری جدید'}
+                  {customer.status === 'regular' && 'مشتری عادی'}
+                  {customer.status === 'vip' && 'مشتری VIP'}
+                </span>
+              </div>
+            </div>
+
+            {/* Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-blue-50 rounded-lg p-4 text-center">
+                <p className="text-2xl font-bold text-blue-600">{customer.totalOrders}</p>
+                <p className="text-sm text-blue-600">کل سفارشات</p>
+              </div>
+              <div className="bg-green-50 rounded-lg p-4 text-center">
+                <p className="text-2xl font-bold text-green-600">{customer.totalSpent.toLocaleString()}</p>
+                <p className="text-sm text-green-600">کل خریدها (تومان)</p>
+              </div>
+              <div className="bg-purple-50 rounded-lg p-4 text-center">
+                <p className="text-2xl font-bold text-purple-600">{Math.round(customer.totalSpent / customer.totalOrders).toLocaleString()}</p>
+                <p className="text-sm text-purple-600">میانگین سفارش (تومان)</p>
+              </div>
+            </div>
+
+            {/* Recent Orders */}
+            <div className="border-t pt-6">
+              <h4 className="font-semibold text-gray-900 mb-4">سفارشات اخیر</h4>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div>
+                    <p className="font-medium">ORD-2024-001</p>
+                    <p className="text-sm text-gray-600">1403/06/15</p>
+                  </div>
+                  <div className="text-left">
+                    <p className="font-medium">2,850,000 تومان</p>
+                    <span className="text-xs px-2 py-1 bg-green-100 text-green-800 rounded-full">تحویل شده</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div>
+                    <p className="font-medium">ORD-2024-005</p>
+                    <p className="text-sm text-gray-600">1403/06/10</p>
+                  </div>
+                  <div className="text-left">
+                    <p className="font-medium">1,200,000 تومان</p>
+                    <span className="text-xs px-2 py-1 bg-green-100 text-green-800 rounded-full">تحویل شده</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Contact Actions */}
+            <div className="flex gap-3 pt-4">
+              <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2">
+                <Mail className="w-4 h-4" />
+                ارسال ایمیل
+              </button>
+              <button className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2">
+                <Phone className="w-4 h-4" />
+                تماس تلفنی
+              </button>
+              <button className="border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50">
+                ویرایش اطلاعات
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Invoice Generator Modal
+  const InvoiceModal = ({ onClose }) => {
+    const [invoiceData, setInvoiceData] = useState({
+      invoiceNumber: 'INV-2024-001',
+      date: '1403/06/15',
+      customerInfo: {
+        name: 'احمد محمدی',
+        address: 'تهران، خیابان ولیعصر، پلاک 123',
+        nationalId: '0123456789',
+        phone: '09123456789'
+      },
+      items: [
+        { name: 'محصول نمونه ۱', quantity: 2, price: 1200000, total: 2400000 },
+        { name: 'محصول نمونه ۲', quantity: 1, price: 450000, total: 450000 }
+      ],
+      subtotal: 2850000,
+      tax: 256500,
+      total: 3106500
+    });
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+            <h3 className="text-xl font-semibold">صدور فاکتور</h3>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          {/* Invoice Content */}
+          <div className="p-8 bg-white" id="invoice-content">
+            <div className="max-w-4xl mx-auto">
+              {/* Header */}
+              <div className="flex justify-between items-start mb-8">
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-900">فاکتور فروش</h1>
+                  <p className="text-gray-600 mt-2">شماره: {invoiceData.invoiceNumber}</p>
+                  <p className="text-gray-600">تاریخ: {invoiceData.date}</p>
+                </div>
+                <div className="text-left">
+                  <div className="text-2xl font-bold text-blue-600 mb-2">فروشگاه آلفا</div>
+                  <p className="text-gray-600">تهران، خیابان ولیعصر، پلاک 123</p>
+                  <p className="text-gray-600">تلفن: 021-12345678</p>
+                  <p className="text-gray-600">کد اقتصادی: 123456789012345</p>
+                </div>
+              </div>
+
+              {/* Customer Info */}
+              <div className="bg-gray-50 rounded-lg p-6 mb-8">
+                <h3 className="font-semibold text-gray-900 mb-4">اطلاعات خریدار</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p><span className="font-medium">نام:</span> {invoiceData.customerInfo.name}</p>
+                    <p><span className="font-medium">کد ملی:</span> {invoiceData.customerInfo.nationalId}</p>
+                  </div>
+                  <div>
+                    <p><span className="font-medium">تلفن:</span> {invoiceData.customerInfo.phone}</p>
+                    <p><span className="font-medium">آدرس:</span> {invoiceData.customerInfo.address}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Items Table */}
+              <div className="mb-8">
+                <table className="w-full border-collapse border border-gray-300">
+                  <thead>
+                    <tr className="bg-gray-50">
+                      <th className="border border-gray-300 p-3 text-right">ردیف</th>
+                      <th className="border border-gray-300 p-3 text-right">شرح کالا/خدمات</th>
+                      <th className="border border-gray-300 p-3 text-center">تعداد</th>
+                      <th className="border border-gray-300 p-3 text-center">قیمت واحد</th>
+                      <th className="border border-gray-300 p-3 text-center">مبلغ کل</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoiceData.items.map((item, index) => (
+                      <tr key={index}>
+                        <td className="border border-gray-300 p-3">{index + 1}</td>
+                        <td className="border border-gray-300 p-3">{item.name}</td>
+                        <td className="border border-gray-300 p-3 text-center">{item.quantity}</td>
+                        <td className="border border-gray-300 p-3 text-center">{item.price.toLocaleString()} تومان</td>
+                        <td className="border border-gray-300 p-3 text-center">{item.total.toLocaleString()} تومان</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Totals */}
+              <div className="flex justify-end mb-8">
+                <div className="w-64">
+                  <div className="flex justify-between py-2">
+                    <span>جمع کل:</span>
+                    <span>{invoiceData.subtotal.toLocaleString()} تومان</span>
+                  </div>
+                  <div className="flex justify-between py-2">
+                    <span>مالیات (9%):</span>
+                    <span>{invoiceData.tax.toLocaleString()} تومان</span>
+                  </div>
+                  <div className="flex justify-between py-2 font-bold text-lg border-t">
+                    <span>مبلغ قابل پرداخت:</span>
+                    <span>{invoiceData.total.toLocaleString()} تومان</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="border-t pt-6 text-center text-sm text-gray-600">
+                <p>این فاکتور با استفاده از سیستم فروشگاه آلفا صادر شده است.</p>
+                <p>جهت استعلام و پیگیری با شماره تلفن 021-12345678 تماس حاصل فرمایید.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="p-6 border-t bg-gray-50 flex gap-3">
+            <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2">
+              <Download className="w-4 h-4" />
+              دانلود PDF
+            </button>
+            <button className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2">
+              <Mail className="w-4 h-4" />
+              ارسال ایمیل
+            </button>
+            <button className="border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50">
+              چاپ
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50" dir="rtl">
+      {/* Navigation */}
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center gap-8">
+              <div className="text-2xl font-bold text-blue-600">α فروشگاه</div>
+              <nav className="flex gap-6">
+                <button
+                  onClick={() => setActiveSection('orders')}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg ${
+                    activeSection === 'orders' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <ShoppingCart className="w-5 h-5" />
+                  سفارشات
+                </button>
+                <button
+                  onClick={() => setActiveSection('customers')}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg ${
+                    activeSection === 'customers' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Users className="w-5 h-5" />
+                  مشتریان
+                </button>
+                <button
+                  onClick={() => setActiveSection('settings')}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg ${
+                    activeSection === 'settings' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Settings className="w-5 h-5" />
+                  تنظیمات
+                </button>
+              </nav>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="text-left">
+                <div className="text-sm font-medium text-gray-900">مدیر سیستم</div>
+                <div className="text-xs text-gray-500">admin@alpha-store.ir</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {activeSection === 'orders' && <OrderManager />}
+        {activeSection === 'customers' && <CustomerManager />}
+        {activeSection === 'settings' && <SettingsPanel />}
+      </div>
+
+      {/* Modals */}
+      {selectedOrder && (
+        <OrderDetailModal 
+          order={selectedOrder} 
+          onClose={() => setSelectedOrder(null)} 
+        />
+      )}
+      
+      {selectedCustomer && (
+        <CustomerProfileModal 
+          customer={selectedCustomer} 
+          onClose={() => setSelectedCustomer(null)} 
+        />
+      )}
+      
+      {showInvoiceModal && (
+        <InvoiceModal onClose={() => setShowInvoiceModal(false)} />
+      )}
+    </div>
+  );
+};
+
+export default OrderCustomerManagement;

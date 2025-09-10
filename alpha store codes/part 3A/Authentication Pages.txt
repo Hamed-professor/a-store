@@ -1,0 +1,336 @@
+// pages/auth/login.tsx
+import React, { useState } from 'react';
+import { LoginForm } from '../../src/components/auth/LoginForm';
+import { RegisterForm } from '../../src/components/auth/RegisterForm';
+import { ForgotPassword } from '../../src/components/auth/ForgotPassword';
+import { OTPVerification } from '../../src/components/auth/OTPVerification';
+import { PasswordReset } from '../../src/components/auth/PasswordReset';
+import { ForgotPasswordData, RegisterFormData } from '../../src/types/auth';
+
+type AuthMode = 'login' | 'register' | 'forgot-password' | 'otp-verification' | 'password-reset';
+
+export default function AuthPage() {
+  const [mode, setMode] = useState<AuthMode>('login');
+  const [otpData, setOtpData] = useState<{
+    phone?: string;
+    email?: string;
+    type: 'registration' | 'login' | 'password_reset';
+  } | null>(null);
+  const [resetToken, setResetToken] = useState<string>('');
+
+  const handleLoginSuccess = () => {
+    // Redirect to dashboard or previous page
+    console.log('Login successful');
+    window.location.href = '/';
+  };
+
+  const handleRegisterSuccess = (userData: RegisterFormData) => {
+    // Show OTP verification for phone number
+    setOtpData({
+      phone: userData.phone,
+      email: userData.email,
+      type: 'registration',
+    });
+    setMode('otp-verification');
+  };
+
+  const handleForgotPasswordSuccess = (data: ForgotPasswordData) => {
+    if (data.method === 'sms') {
+      // Show OTP verification for SMS reset
+      setOtpData({
+        phone: data.emailOrPhone,
+        type: 'password_reset',
+      });
+      setMode('otp-verification');
+    } else {
+      // For email, show success message and redirect to login
+      setTimeout(() => {
+        setMode('login');
+      }, 3000);
+    }
+  };
+
+  const handleOTPSuccess = (code: string) => {
+    if (otpData?.type === 'registration') {
+      // Registration completed, redirect to login
+      setMode('login');
+    } else if (otpData?.type === 'password_reset') {
+      // Generate mock reset token and show password reset form
+      setResetToken(`reset-token-${Date.now()}`);
+      setMode('password-reset');
+    }
+  };
+
+  const handlePasswordResetSuccess = () => {
+    // Password reset completed, redirect to login
+    setMode('login');
+  };
+
+  const renderAuthComponent = () => {
+    switch (mode) {
+      case 'login':
+        return (
+          <LoginForm
+            onSwitchToRegister={() => setMode('register')}
+            onForgotPassword={() => setMode('forgot-password')}
+            onSuccess={handleLoginSuccess}
+          />
+        );
+
+      case 'register':
+        return (
+          <RegisterForm
+            onSwitchToLogin={() => setMode('login')}
+            onSuccess={handleRegisterSuccess}
+          />
+        );
+
+      case 'forgot-password':
+        return (
+          <ForgotPassword
+            onBack={() => setMode('login')}
+            onSuccess={handleForgotPasswordSuccess}
+          />
+        );
+
+      case 'otp-verification':
+        if (!otpData) return null;
+        return (
+          <OTPVerification
+            phone={otpData.phone}
+            email={otpData.email}
+            type={otpData.type}
+            onSuccess={handleOTPSuccess}
+            onBack={() => {
+              if (otpData.type === 'registration') {
+                setMode('register');
+              } else {
+                setMode('forgot-password');
+              }
+            }}
+          />
+        );
+
+      case 'password-reset':
+        return (
+          <PasswordReset
+            token={resetToken}
+            onSuccess={handlePasswordResetSuccess}
+          />
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-indigo-50">
+      {/* Background Pattern */}
+      <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
+      
+      {/* Content */}
+      <div className="relative flex items-center justify-center min-h-screen p-4">
+        <div className="w-full max-w-md">
+          {renderAuthComponent()}
+        </div>
+      </div>
+
+      {/* Background Decorations */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-indigo-300 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-2000"></div>
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-4000"></div>
+      </div>
+
+      <style jsx global>{`
+        .bg-grid-pattern {
+          background-image: radial-gradient(circle, #e5e7eb 1px, transparent 1px);
+          background-size: 20px 20px;
+        }
+        
+        .animate-blob {
+          animation: blob 7s infinite;
+        }
+        
+        .animation-delay-2000 {
+          animation-delay: 2s;
+        }
+        
+        .animation-delay-4000 {
+          animation-delay: 4s;
+        }
+        
+        @keyframes blob {
+          0% {
+            transform: translate(0px, 0px) scale(1);
+          }
+          33% {
+            transform: translate(30px, -50px) scale(1.1);
+          }
+          66% {
+            transform: translate(-20px, 20px) scale(0.9);
+          }
+          100% {
+            transform: translate(0px, 0px) scale(1);
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// pages/auth/register.tsx
+import React from 'react';
+import AuthPage from './login';
+
+// Use the same component but start with register mode
+export default function RegisterPage() {
+  return <AuthPage />;
+}
+
+// pages/auth/forgot-password.tsx
+import React from 'react';
+import AuthPage from './login';
+
+// Use the same component but start with forgot password mode
+export default function ForgotPasswordPage() {
+  return <AuthPage />;
+}
+
+// Example usage in a Next.js app component or main layout
+// src/components/auth/AuthModal.tsx
+import React, { useState } from 'react';
+import { X } from 'lucide-react';
+import { LoginForm } from './LoginForm';
+import { RegisterForm } from './RegisterForm';
+import { ForgotPassword } from './ForgotPassword';
+import { OTPVerification } from './OTPVerification';
+
+interface AuthModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  initialMode?: 'login' | 'register';
+}
+
+export const AuthModal: React.FC<AuthModalProps> = ({
+  isOpen,
+  onClose,
+  initialMode = 'login',
+}) => {
+  const [mode, setMode] = useState<'login' | 'register' | 'forgot-password' | 'otp'>(initialMode);
+  const [otpData, setOtpData] = useState<{
+    phone?: string;
+    email?: string;
+    type: 'registration' | 'login' | 'password_reset';
+  } | null>(null);
+
+  if (!isOpen) return null;
+
+  const handleLoginSuccess = () => {
+    onClose();
+    // Handle successful login (e.g., refresh page, update global state)
+  };
+
+  const handleRegisterSuccess = (userData: any) => {
+    setOtpData({
+      phone: userData.phone,
+      email: userData.email,
+      type: 'registration',
+    });
+    setMode('otp');
+  };
+
+  const handleForgotPasswordSuccess = (data: any) => {
+    if (data.method === 'sms') {
+      setOtpData({
+        phone: data.emailOrPhone,
+        type: 'password_reset',
+      });
+      setMode('otp');
+    } else {
+      // Email method - close modal and show success message
+      onClose();
+    }
+  };
+
+  const handleOTPSuccess = () => {
+    onClose();
+    // Handle successful OTP verification
+  };
+
+  const renderContent = () => {
+    switch (mode) {
+      case 'login':
+        return (
+          <LoginForm
+            onSwitchToRegister={() => setMode('register')}
+            onForgotPassword={() => setMode('forgot-password')}
+            onSuccess={handleLoginSuccess}
+          />
+        );
+
+      case 'register':
+        return (
+          <RegisterForm
+            onSwitchToLogin={() => setMode('login')}
+            onSuccess={handleRegisterSuccess}
+          />
+        );
+
+      case 'forgot-password':
+        return (
+          <ForgotPassword
+            onBack={() => setMode('login')}
+            onSuccess={handleForgotPasswordSuccess}
+          />
+        );
+
+      case 'otp':
+        if (!otpData) return null;
+        return (
+          <OTPVerification
+            phone={otpData.phone}
+            email={otpData.email}
+            type={otpData.type}
+            onSuccess={handleOTPSuccess}
+            onBack={() => {
+              if (otpData.type === 'registration') {
+                setMode('register');
+              } else {
+                setMode('forgot-password');
+              }
+            }}
+          />
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div 
+        className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      
+      {/* Modal */}
+      <div className="relative max-w-md w-full max-h-[90vh] overflow-y-auto">
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 left-4 z-10 p-2 bg-white rounded-full shadow-lg hover:bg-gray-50 transition-colors"
+          dir="ltr"
+        >
+          <X className="w-5 h-5 text-gray-600" />
+        </button>
+        
+        {/* Content */}
+        {renderContent()}
+      </div>
+    </div>
+  );
+};
